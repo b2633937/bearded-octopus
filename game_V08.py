@@ -11,8 +11,15 @@ from locals import *
 """
 NOTES: 
 
--   make sure every player gets reward when game ends! > Qlearning!
--   reset prevstate and prevaction at gameEnds
+B - evaluate state after oponent took action > Qlearning!
+B - use mirroring to reduce state space
+B - pretty print state space 
+B - pretty print avg graph with sd 
+
+T - implement policy evaluation
+E - implement policy iteration
+H - implement value iteration
+
 """
 
 
@@ -37,8 +44,8 @@ def main():
     gameScreen = GameScreen(DISPLAYSURF)
    
     # instantiate agents
-    player1 = Player.new('Qlearning') #'RandomComputer') #
-    player2 = Player.new('Human')
+    player1 = Player.new('Human') #'RandomComputer') #
+    player2 = Player.new('RandomComputer')
     #player3 = Player.new('Qlearning')
 
     AGENTS.append(Agent(player = player1, role='predator', nr=len(AGENTS), img=IMAGES['boy']))
@@ -49,7 +56,7 @@ def main():
 
     episodes = 1
     episode = 0
-    rnds = 10000 # 
+    rnds = 100 
     rnd = 0
     stats = np.zeros((episodes, rnds))
   
@@ -69,7 +76,6 @@ def main():
             activeAgent = 0
             rnd += 1
             if rnd == rnds:
-                print 'jeeeej'
                 for agent in AGENTS:
                     agent.quit()
                 episode += 1
@@ -199,8 +205,8 @@ def loadImages():
     backgroundImg = pygame.transform.scale(backgroundImg, (495,495))
     IMAGES['backgroundImg'] =  backgroundImg 
     #load agent images
-    IMAGES['boy'] = pygame.image.load('boy.png')
-    IMAGES['princess'] = pygame.image.load('princess.png')
+    IMAGES['boy'] = pygame.image.load('princess.png')
+    IMAGES['princess'] = pygame.image.load('boy.png')
 
 
 #####################################################################################
