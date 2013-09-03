@@ -76,7 +76,6 @@ class Player(object):
                 state.append(self.translatePos(self.agents[id].POS, observation.positions[i])) 
         return tuple(state) 
 
-
     def translatePos(self, ownPos, otherPos):
         #translates other position relative to centered ownPos 
         center = (BOARDSIZE/2, BOARDSIZE/2)
@@ -198,11 +197,27 @@ class RandomComputer(Player):
         super(RandomComputer,self).__init__()
 
     def getAction(self, observation, id):
-        #STAY with a given probability
-        rand = random.random()
-        if rand <= 0.2: #TODO: change to 0.8!
-            return STAY
-        else: #find actions that don't cause shared position
+
+        if self.agents[id].role == 'prey':
+            #STAY with a given probability
+            rand = random.random()
+            if rand <= 0.8: #TODO: change to 0.8!
+                return STAY
+            else: #find actions that don't cause shared position
+                adjacent = set([action2Tile(UP, self.agents[id].POS),
+                                action2Tile(DOWN, self.agents[id].POS),
+                                action2Tile(LEFT, self.agents[id].POS),
+                                action2Tile(RIGHT, self.agents[id].POS)])
+                freeAdjacentTiles = adjacent - set(observation.positions)
+                possibleActions = []
+                for freeAdjacentTile in freeAdjacentTiles:
+                    possibleActions.append(tile2Action(self.agents[id].POS, freeAdjacentTile))
+                #remaining actions have equal probability
+                rand = random.random()
+                chance = float(1) / len(possibleActions)
+                return possibleActions[int(rand / chance)] 
+
+        if self.agents[id].role == 'predator':
             adjacent = set([action2Tile(UP, self.agents[id].POS),
                             action2Tile(DOWN, self.agents[id].POS),
                             action2Tile(LEFT, self.agents[id].POS),
@@ -211,10 +226,11 @@ class RandomComputer(Player):
             possibleActions = []
             for freeAdjacentTile in freeAdjacentTiles:
                 possibleActions.append(tile2Action(self.agents[id].POS, freeAdjacentTile))
-            #remaining actions have equal probability
+            possibleActions.append(STAY)
             rand = random.random()
             chance = float(1) / len(possibleActions)
             return possibleActions[int(rand / chance)] 
+
 
 class Qlearning(Player):
     """docstring for Qlearning"""
