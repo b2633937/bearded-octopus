@@ -218,18 +218,7 @@ class RandomComputer(Player):
                 return possibleActions[int(rand / chance)] 
 
         if self.agents[id].role == 'predator':
-            adjacent = set([action2Tile(UP, self.agents[id].POS),
-                            action2Tile(DOWN, self.agents[id].POS),
-                            action2Tile(LEFT, self.agents[id].POS),
-                            action2Tile(RIGHT, self.agents[id].POS)])
-            freeAdjacentTiles = adjacent - set(observation.positions)
-            possibleActions = []
-            for freeAdjacentTile in freeAdjacentTiles:
-                possibleActions.append(tile2Action(self.agents[id].POS, freeAdjacentTile))
-            possibleActions.append(STAY)
-            rand = random.random()
-            chance = float(1) / len(possibleActions)
-            return possibleActions[int(rand / chance)] 
+            return random.randint(0,4)
 
 
 class Qlearning(Player):
@@ -294,7 +283,6 @@ class Qlearning(Player):
 
     def quit(self, id):
         if id == 0 and self.training == 1:
-            print 'qquitting'
             try:
                 pickle.dump(self.Qtable, open('agent' + str(self.agents[id].nr) + self.QtableFN, "wb" ), pickle.HIGHEST_PROTOCOL)
             except:

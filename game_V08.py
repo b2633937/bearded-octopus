@@ -9,12 +9,15 @@ from players import *
 from locals import *
 
 """
-NOTES: 
+TODO: 
 
 B - evaluate state after oponent took action > Qlearning!
 B - use mirroring to reduce state space
 B - pretty print state space 
-B - pretty print avg graph with sd 
+B - pretty print avg graph with std     - DONE            
+B - create visual switch
+B - fix 'QUIT'-button
+B - commented TODO's
 
 T - implement policy evaluation
 E - implement policy iteration
@@ -24,13 +27,16 @@ H - implement value iteration
 
 
 def main():
-    global DISPLAYSURF, AGENTS, BOARDSIZE, TILESIZE, BOARDOFFSETX, BOARDOFFSETY
+    global DISPLAYSURF, AGENTS, BOARDSIZE, TILESIZE, BOARDOFFSETX, BOARDOFFSETY #TODO: get rid of globals
     pygame.init()
+    assignment = 1
+    verbose = 0
+    draw = 1
     windowWidth = 800
     windowheight = 600
     BOARDOFFSETX = 250
     BOARDOFFSETY = 50
-    BOARDSIZE = 11 # always uneven in order for state to work!
+    BOARDSIZE = 11 # always uneven in order for state to work! TODO: fix!
     TILESIZE = 45
     FPS = 30 #frames per second setting
     reInitmode = 'fixed' # 'random' #
@@ -39,32 +45,33 @@ def main():
     loadSounds()
     loadImages()
 
-    #set up the window
-    DISPLAYSURF = pygame.display.set_mode((windowWidth, windowheight), 0, 32)
-    gameScreen = GameScreen(DISPLAYSURF)
+    if draw:
+        #set up the window
+        DISPLAYSURF = pygame.display.set_mode((windowWidth, windowheight), 0, 32)
+        gameScreen = GameScreen(DISPLAYSURF)
    
     # instantiate agents
-    player1 = Player.new('Human') #'RandomComputer') #
+    player1 = Player.new('RandomComputer') #'Human') #
     player2 = Player.new('RandomComputer')
-    #player3 = Player.new('Qlearning')
 
     AGENTS.append(Agent(player = player1, role='predator', nr=len(AGENTS), img=IMAGES['boy']))
     AGENTS.append(Agent(player = player2, role='prey', nr=len(AGENTS), img=IMAGES['princess']))
-    #AGENTS.append(Agent(player = player2, role='predator', nr=len(AGENTS), img=IMAGES['boy']))
 
     initPositions(AGENTS, reInitmode)
 
-    episodes = 1
+    episodes = 2 
     episode = 0
-    rnds = 100 
+    rnds = 2 #100 
     rnd = 0
     stats = np.zeros((episodes, rnds))
   
     activeAgent = 0
     turn = 0
     caught = 0
+
     while True: #the main game loop
-        gameScreen.draw(turn, caught)
+        if draw:
+            gameScreen.draw(turn, caught)
         handleUserInput() #listen for Quit events etc.
         
         if gameEnds(): #check for game end
@@ -84,12 +91,7 @@ def main():
                 caught = 0
                 if episode == episodes:
                     pygame.quit()
-                    # print stats
-                    # print 'avg turns: ', stats.sum(0) / float(episodes)
-                    pickle.dump(stats, open('stats', "wb"), pickle.HIGHEST_PROTOCOL)
-                    plt.figure('1')
-                    plt.plot(np.arange(1,rnds+1,1), stats.sum(0) / float(episodes))
-                    plt.show()
+                    processResults(stats, rnds, episodes)
                     sys.exit()
         else:
             #Agent takes move 
@@ -105,6 +107,8 @@ def main():
                 if activeAgent == len(AGENTS)-1:
                     activeAgent = 0
                     turn += 1
+                    if assignment == 1 and verbose:
+                        print [agent.POS for agent in AGENTS]
                 else:
                     activeAgent += 1
      
@@ -156,7 +160,7 @@ def initPositions(AGENTS, mode):
             while position in positions: 
                 position = (random.randint(0,9), random.randint(0,9))
             agent.POS = position
-    fixedInitPositions = [(0,0), (5,5)]
+    fixedInitPositions = [(0,0), (5,5)] #TODO: move to Player?
     if mode == 'fixed':
         for i in xrange(len(AGENTS)):
             AGENTS[i].POS = fixedInitPositions[i]
@@ -207,6 +211,22 @@ def loadImages():
     #load agent images
     IMAGES['boy'] = pygame.image.load('princess.png')
     IMAGES['princess'] = pygame.image.load('boy.png')
+
+def processResults(stats, rnds, episodes):
+    try:
+        pickle.dump(stats, open('stats', "wb"), pickle.HIGHEST_PROTOCOL)    
+    except:
+        print "can't write stats file"
+
+    plt.figure('Results')
+    x = np.arange(1,rnds+1,1)
+    y = stats.sum(0) / float(episodes)
+    std = stats.std(0)
+    print x.shape
+    print y.shape
+    errorfill(x, y, std)
+    plt.show()
+
 
 
 #####################################################################################
