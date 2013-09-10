@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pygame
+
 
 WHITE    = (255, 255, 255)
 DARKGRAY = ( 70,  70,  70)
@@ -17,6 +19,22 @@ LEFT = 2
 RIGHT = 3 
 STAY = 4
 
+Flips = None
+
+IMAGES = {}
+#load and scale background image
+backgroundImg = pygame.image.load('images/flippyboard.png')
+IMAGES['backgroundImg'] =  backgroundImg 
+#load agent images
+IMAGES['boy'] = pygame.image.load('images/princess.png')
+IMAGES['princess'] = pygame.image.load('images/boy.png')
+
+SOUNDS = {}
+pygame.mixer.init()
+SOUNDS['caught'] = pygame.mixer.Sound('sounds/match4.wav')
+
+
+# used for plotting error margins
 def errorfill(x, y, yerr, color=None, alpha_fill=0.3, ax=None):
     ax = ax if ax is not None else plt.gca()
     if color is None:
