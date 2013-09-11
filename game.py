@@ -7,17 +7,18 @@ from pygame.locals import *
 from players import *
 from locals import *
 
-class Game(object):
+class Game(object, ):
 
     def __init__(self):
-        #global SCREEN, self.agents
         self.boardSize = (11, 11)
         self.agents = [] 
+        self.fixedInitPositions = [(0,0), (5,5)]
+        reInitmode = 'fixed' # 'random' #
         assignment = 1
         verbose = 1
         draw = 1
-
-        reInitmode = 'fixed' # 'random' #
+        episodes = 2 
+        rnds = 2 #100 
         pygame.init()
         fpsClock = pygame.time.Clock()
 
@@ -26,21 +27,17 @@ class Game(object):
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), self.boardSize)
        
         # instantiate agents
-        Player.boardSize = self.boardSize
-        player1 = Player.new('Human', self) #'RandomComputer') #
-        player2 = Player.new('RandomComputer', self)
+        player1 = Human(self)
+        player2 = RandomComputer(self)
 
         self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
         self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))
-
         self.initPositions(reInitmode)
 
-        episodes = 2 
+
         episode = 0
-        rnds = 2 #100 
         rnd = 0
         stats = np.zeros((episodes, rnds))
-      
         activeAgent = 0
         turn = 0
         caught = 0
@@ -90,9 +87,6 @@ class Game(object):
          
             fpsClock.tick(30)
 
-    def test(self):
-        print 'yup'
-
     def getObservation(self, agentNr, observability):
         #positions also contains own position!
         if observability == 'fo': #full obervability
@@ -104,9 +98,8 @@ class Game(object):
         return [agent.POS for agent in self.agents]
 
     def transition(self, state, action, agentNr):
-        effect = [(0, -1), (0, 1), (-1, 0), (1, 0), (0,0)]
-        return ((self.agents[agentNr].POS[0]+effect[action][0])%self.boardSize[0], 
-            (self.agents[agentNr].POS[1]+effect[action][1])%self.boardSize[1])
+        return ((self.agents[agentNr].POS[0]+EFFECTS[action][0])%self.boardSize[0], 
+            (self.agents[agentNr].POS[1]+EFFECTS[action][1])%self.boardSize[1])
 
     def gameEnds(self): #game ends if any 2 agents share same position
         s = set()
@@ -145,10 +138,9 @@ class Game(object):
                 while position in positions: 
                     position = (random.randint(0,9), random.randint(0,9))
                 agent.POS = position
-        fixedInitPositions = [(0,0), (5,5)] #TODO: move to Player?
         if mode == 'fixed':
             for i in xrange(len(self.agents)):
-                self.agents[i].POS = fixedInitPositions[i]
+                self.agents[i].POS = self.fixedInitPositions[i]
 
     def processResults(self, stats, rnds, episodes):
         try:

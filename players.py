@@ -24,19 +24,6 @@ class Agent(object):
 
 
 class Player(object):
-    BOARDSIZE = None #must be set by game
-    @staticmethod
-    def new(playerType, game):
-        if playerType == 'Human':
-            return Human(game)
-        elif playerType == 'RandomComputer':
-            return RandomComputer(game)
-        elif playerType == 'Optimizer':
-            return Optimizer(game)
-        elif playerType == 'Qlearning':
-            return Qlearning(game)
-        else:
-            sys.exit('ERROR: unknown player type: ' + playerType)
 
     def __init__(self, gameInstance):
         super(Player, self).__init__()
@@ -47,12 +34,24 @@ class Player(object):
         self.agents.append(agent)
         return len(self.agents)-1
 
-    def getState(self, observation, id):
+    def getStateRep(self, observation, id):
         state = []
         for i in xrange(len(observation.positions)):
             if i != self.agents[id].nr:
                 state.append(self.translatePos(self.agents[id].POS, observation.positions[i]), self.BOARDSIZE) 
         return tuple(state) 
+
+    def action2Tile(self, action, position):
+        boardSize = self.gameInstance.boardSize
+        return ((position[0]+EFFECTS[action][0])%boardSize[0], 
+            (position[1]+EFFECTS[action][1])%boardSize[1])
+
+    def tile2Action(self, basePosition, adjacentTile):
+        if adjacentTile == self.action2Tile(UP, basePosition): return UP
+        if adjacentTile == self.action2Tile(DOWN, basePosition): return DOWN
+        if adjacentTile == self.action2Tile(LEFT, basePosition): return LEFT
+        if adjacentTile == self.action2Tile(RIGHT, basePosition): return RIGHT
+        if adjacentTile == basePosition: return STAY
 
     def translatePos(self, ownPos, otherPos, boardSize): 
         #translates other position after to centering ownPos 
@@ -92,30 +91,6 @@ class RandomComputer(Player):
     """docstring for RandomComputer"""
     def __init__(self, gameInstance):
         super(RandomComputer,self).__init__(gameInstance)
-
-    def action2Tile(self, action, position):
-        boardSize = self.gameInstance.boardSize
-        X,Y = position
-        if action == UP:
-            Y = Y-1 if Y > 0 else boardSize[1]-1
-        elif action == DOWN:
-            Y = Y+1 if Y < boardSize[1]-1 else 0
-        elif action == LEFT:
-            X = X-1 if X > 0 else boardSize[0]-1
-        elif action == RIGHT:
-            X = X+1 if X < boardSize[0]-1 else 0
-        elif action == STAY:
-            pass
-        else: 
-            sys.exit('ERROR: unknown action: ' +  str(action))
-        return (X,Y)
-
-    def tile2Action(self, basePosition, adjacentTile):
-        if adjacentTile == self.action2Tile(UP, basePosition): return UP
-        if adjacentTile == self.action2Tile(DOWN, basePosition): return DOWN
-        if adjacentTile == self.action2Tile(LEFT, basePosition): return LEFT
-        if adjacentTile == self.action2Tile(RIGHT, basePosition): return RIGHT
-        if adjacentTile == basePosition: return STAY
 
     def getAction(self, observation, id):
         if self.agents[id].role == 'prey':
@@ -178,10 +153,7 @@ class Qlearning(Player):
     def getAction(self, observation, id): 
         if id == 0:
             self.shape = tuple([5]*len(self.agents)) # TODO: preferably init only once!
-            # print 'shape: ', self.shape
-            # print 'nro agents controlled by player: ', len(self.agents)
-            # print [self.Qinitval]*5**len(self.agents)
-            self.state = self.getState(observation, id)
+            self.state = self.getStateRep(observation, id)
             print 'state: ', self.state
             possActions = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.agents))
             maxval = max(possActions)
@@ -210,7 +182,7 @@ class Qlearning(Player):
         if id == 0 and self.training == 1:
             #Qlearn
             self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.agents))
-            newState = self.getState(observation, id)
+            newState = self.getStateRep(observation, id)
             self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (reward + self.gamma * max(self.Qtable.get(newState, [self.Qinitval]*5**len(self.agents))) - self.Qtable[self.state][self.action])
             # print 'state: ', self.state, 'action: ', self.action, 'reward: ', reward 
 

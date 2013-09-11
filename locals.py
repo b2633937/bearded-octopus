@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 
-
+#------------------- define COLORS -------------------
 WHITE    = (255, 255, 255)
 DARKGRAY = ( 70,  70,  70)
 BLACK    = (  0,   0,   0)
@@ -13,14 +13,15 @@ YELLOW   = (255, 255,   0)
 ORANGE   = (255, 128,   0)
 PURPLE   = (255,   0, 255)
 
+#-------- available ACTIONS and their EFFECTS ---------
 UP = 0
 DOWN = 1 
 LEFT = 2
 RIGHT = 3 
 STAY = 4
+EFFECTS = [(0, -1), (0, 1), (-1, 0), (1, 0), (0,0)]
 
-Flips = None
-
+#--------------- load IMAGES and SOUNDS ---------------
 IMAGES = {}
 #load and scale background image
 backgroundImg = pygame.image.load('images/flippyboard.png')
@@ -34,7 +35,7 @@ pygame.mixer.init()
 SOUNDS['caught'] = pygame.mixer.Sound('sounds/match4.wav')
 
 
-# used for plotting error margins
+#----- function used for plotting error margins -------
 def errorfill(x, y, yerr, color=None, alpha_fill=0.3, ax=None):
     ax = ax if ax is not None else plt.gca()
     if color is None:
