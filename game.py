@@ -16,19 +16,20 @@ class Game(object, ):
         reInitmode = 'fixed' # 'random' #
         assignment = 1
         verbose = 1
-        draw = 1
-        episodes = 2 
+        draw = 0
+        episodes = 2  
         rnds = 2 #100 
-        pygame.init()
-        fpsClock = pygame.time.Clock()
+
 
         if draw:
             #set up the window
+            pygame.init()
+            fpsClock = pygame.time.Clock()
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), self.boardSize)
        
         # instantiate agents
         player1 = Human(self)
-        player2 = RandomComputer(self)
+        player2 = PolicyIteration(self) #RandomComputer(self)#
 
         self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
         self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))
@@ -134,9 +135,9 @@ class Game(object, ):
         if mode == 'random': #still prevent agents from getting same initial position
             positions = set()
             for agent in self.agents:
-                position = (random.randint(0,9), random.randint(0,9))
+                position = (random.randint(0,self.boardSize[0]-1), random.randint(0,self.boardSize[1]-1))
                 while position in positions: 
-                    position = (random.randint(0,9), random.randint(0,9))
+                    position = (random.randint(0,self.boardSize[0]-1), random.randint(0,self.boardSize[1]-1))
                 agent.POS = position
         if mode == 'fixed':
             for i in xrange(len(self.agents)):
@@ -158,7 +159,6 @@ class Game(object, ):
         plt.show()
 
 
-
 #####################################################################################
 
 class Observation(object):
@@ -176,10 +176,11 @@ class GameScreen(object):
         self.boardOffsetX = 250
         self.boardoffsetY = 50
         self.tileSize = min(500/self.boardSize[0], 500/self.boardSize[1])
-        self.boardDim = (self.boardSize[1]*self.tileSize, self.boardSize[0]*self.tileSize)
+        self.boardDim = (self.boardSize[0]*self.tileSize, self.boardSize[1]*self.tileSize)
         IMAGES['backgroundImg'] = pygame.transform.scale(IMAGES['backgroundImg'],
             (self.boardDim[1], self.boardDim[0]))
         pygame.display.set_caption('Kiss of Death')
+
         self.fontObj = pygame.font.Font('freesansbold.ttf', 32)
 
         self.textSurfaceObj = self.fontObj.render('Turn: 00', True, BLUE)
@@ -215,15 +216,15 @@ class GameScreen(object):
 
     def drawBoard(self):
         pygame.draw.rect(self.displaySurf, RED, (self.boardOffsetX, self.boardoffsetY, self.boardDim[1], self.boardDim[0]), 3) #draw border
-        for i in xrange(1, self.boardSize[1]): #draw horizontal lines
+        for i in xrange(1, self.boardSize[0]): #draw horizontal lines
             pygame.draw.line(self.displaySurf, RED, (self.boardOffsetX, self.boardoffsetY+i*self.tileSize), 
                 (self.boardOffsetX+self.boardDim[1], self.boardoffsetY+i*self.tileSize),1)
-        for i in xrange(1, self.boardSize[0]): #draw vertical lines
+        for i in xrange(1, self.boardSize[1]): #draw vertical lines
             pygame.draw.line(self.displaySurf, RED, (self.boardOffsetX+i*self.tileSize, 50), 
                 (self.boardOffsetX+i*self.tileSize, self.boardoffsetY+self.boardDim[0]),1)
         self.displaySurf.blit(self.displaySurf, (0, 0))
    
-    def draw2Tile(self, (x, y), img):
+    def draw2Tile(self, (y, x), img):
         screenX = (x*self.tileSize + 0.5*self.tileSize + self.boardOffsetX)
         screenY = (y*self.tileSize + 0.5*self.tileSize + self.boardoffsetY)
         screenY += 9 #TODO: handle picture ofsett

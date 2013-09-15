@@ -14,12 +14,14 @@ ORANGE   = (255, 128,   0)
 PURPLE   = (255,   0, 255)
 
 #-------- available ACTIONS and their EFFECTS ---------
-UP = 0
-DOWN = 1 
-LEFT = 2
-RIGHT = 3 
-STAY = 4
-EFFECTS = [(0, -1), (0, 1), (-1, 0), (1, 0), (0,0)]
+UP = 1
+DOWN = 2 
+LEFT = 3
+RIGHT = 4 
+STAY = 0
+# EFFECTS = [(-1, 0), (1, 0), (0, -1), (0, 1), (0, 0)]
+EFFECTS = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
+REVEFFECTS = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)] #when making moves in an agents StateRep
 
 #--------------- load IMAGES and SOUNDS ---------------
 IMAGES = {}
