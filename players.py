@@ -170,7 +170,6 @@ class PolicyIteration(Player):
                         policyChanged = True
             if policyChanged == False:
                 break
-
         print policy
         sys.exit()
 
@@ -204,8 +203,6 @@ class PolicyIteration(Player):
                 sPrimes[halfwayState] = 0.8 #prey stays at same location 
                 return sPrimes
 
-
-    
     def getAction(self, observation, id):
         return 4
 
@@ -213,10 +210,92 @@ class ValueIteration(Player):
     """docstring for ValueIteration"""
     def __init__(self, gameInstance):
         super(ValueIteration,self).__init__(gameInstance)
+        Vinitval = 0
+        V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 player scenario
+        threshold = 0.01 #TODO: change to sensible value
+        gamma = 0.8
+        policy = {}
+
+        #   policy evaluation
+        while True:
+            delta = 0
+            vCopy = V.copy()
+            for i in xrange(V.shape[0]): #for each state
+                for j in xrange(V.shape[1]):
+                    s = (i, j)
+                    v = 0
+                    if s != (5,5): #TODO: terminal state not part of S?
+                        policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, })
+                        actionValues = {}
+                        for a, p_a in policy[s].items(): #for each action predator considers
+                            actionValues[a] = 0
+                            sPrimes = self.transitionModel(s, a)
+                            for sPrime, p_sPrime in sPrimes.items():
+                                actionValues[a] += p_a * p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
+                        v = max(actionValues.values()) #key diff between Policy Iteration and Value Iteration!
+                        delta = max(delta, abs(v - V[s])) 
+                        vCopy[s] = v #V[s] = v
+            V = vCopy
+
+            #   policy improvement
+            policyChanged = False
+            for s in policy:
+                v = 0
+                if s != (5,5): #TODO: terminal state not part of S?
+                    actionValues = [0, 0, 0, 0, 0]
+                    for a in xrange(5): #for each possible action 
+                        sPrimes = self.transitionModel(s,a)
+                        for sPrime, p_sPrime in sPrimes.items():
+                            actionValues[a] += p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
+                    greadyActions = [i for i, v in enumerate(actionValues) if v == max(actionValues)]
+                    p = 1/float(len(greadyActions))
+                    oldPolicy = set(policy[s].keys()) 
+                    policy[s] = {}
+                    for a in greadyActions:
+                        policy[s][a] = p
+
+            if delta < threshold:
+                break
+
+        np.set_printoptions(precision=1)
+        np.set_printoptions(suppress=True)
+        print V
+        print 'delta: ', delta
+        print policy
+        sys.exit()
+
+    def reward(self, s):
+        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
+        if s == predPos:
+            return 10
+        else:
+            return 0
+
+    def transitionModel(self, s,a): # returns a dictionary {s': prob, ...}
+        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
+        if s == predPos: #absorbing state
+            return {s: 1}
+        else:
+            # halfwayState = (s[0]+REVEFFECTS[a][0]%self.boardSize[0], s[1]+REVEFFECTS[a][1]%self.boardSize[1])
+            halfwayState = ((s[0]+REVEFFECTS[a][0])%self.boardSize[0], (s[1]+REVEFFECTS[a][1])%self.boardSize[1])
+            # print 'halfwayState: ', halfwayState
+            if halfwayState == predPos: #no escape possible
+                return {halfwayState: 1}
+            else: 
+                sPrimes = {}
+                for prey_a in xrange(1,5):
+                    sPrime =   ((halfwayState[0]+EFFECTS[prey_a][0])%self.boardSize[0], 
+                                (halfwayState[1]+EFFECTS[prey_a][1])%self.boardSize[1])
+                    if sPrime != predPos:
+                        sPrimes[sPrime] = None
+                prob = 0.2/len(sPrimes) #now we know how many states follow, we know their probs
+                for sPrime in sPrimes:
+                    sPrimes[sPrime] = prob 
+                sPrimes[halfwayState] = 0.8 #prey stays at same location 
+                return sPrimes
 
     def getAction(self, observation, id):
-        return None
-
+        return 4
 class Qlearning(Player):
     """docstring for Qlearning"""
     def __init__(self, gameInstance):
