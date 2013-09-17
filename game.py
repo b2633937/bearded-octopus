@@ -29,7 +29,7 @@ class Game(object, ):
        
         # instantiate agents
         player1 = Human(self)
-        player2 = ValueIteration(self) #RandomComputer(self)#
+        player2 = PolicyIteration(self) #RandomComputer(self)#
 
         self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
         self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))

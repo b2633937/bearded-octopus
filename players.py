@@ -1,6 +1,8 @@
 import random, sys, pygame, pickle, numpy as np
 from pygame.locals import *
 from locals import *
+import matplotlib.pyplot as plt
+from pylab import *
 
 
 class Agent(object):
@@ -59,7 +61,7 @@ class Player(object):
     def getAction(self, observation): 
         sys.exit("function getAction not implemented for agent " + str(agent.nr))
 
-    def finalize(self, reward, observation, id):
+    def finalize(self, R, observation, id):
         pass
 
     def quit(self, id):
@@ -136,9 +138,9 @@ class PolicyIteration(Player):
                         if s != (5,5): #TODO: terminal state not part of S?
                             policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, })
                             for a,p_a in policy[s].items(): #for each action predator considers
-                                sPrimes = self.transitionModel(s,a)
+                                sPrimes = self.P(s,a)
                                 for sPrime, p_sPrime in sPrimes.items():
-                                    v += p_a * p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
+                                    v += p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
                             delta = max(delta, abs(v - V[s])) 
                             vCopy[s] = v #V[s] = v
                 V = vCopy
@@ -154,13 +156,13 @@ class PolicyIteration(Player):
             for s in policy:
                 v = 0
                 if s != (5,5): #TODO: terminal state not part of S?
-                    actionValues = [0, 0, 0, 0, 0]
+                    actionValues = {}
                     for a in xrange(5): #for each possible action 
-                        sPrimes = self.transitionModel(s,a)
+                        sPrimes = self.P(s,a)
                         for sPrime, p_sPrime in sPrimes.items():
-                            actionValues[a] += p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
-                    greadyActions = [i for i, v in enumerate(actionValues) if v == max(actionValues)]
-                    print greadyActions
+                            actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+                    greadyActions = [i for i, v in actionValues.items() if 
+                    v < max(actionValues.values()) + 0.00001 and v > max(actionValues.values()) - 0.00001]
                     p = 1/float(len(greadyActions))
                     oldPolicy = set(policy[s].keys()) 
                     policy[s] = {}
@@ -170,24 +172,63 @@ class PolicyIteration(Player):
                         policyChanged = True
             if policyChanged == False:
                 break
-        print policy
+        self.printPolicy(policy)
+        print V[(0,9)]
+        print V[(1,10)]
+        s = (0,8)
+        actionValues = {}
+        for a in xrange(5): #for each possible action 
+            sPrimes = self.P(s,a)
+            for sPrime, p_sPrime in sPrimes.items():
+                actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+        print actionValues
+
+        self.printV(V)
         sys.exit()
 
-    def reward(self, s):
+    def printPolicy(self, p):
+        for i in xrange(self.boardSize[0]):
+            print '\n'
+            for j in xrange(self.boardSize[1]):
+                print p.get((i,j), {0: 1.0}).keys(), '\t',
+        print
+
+#-----------------------------------------------------------------------------
+    def printV(self, V):
+        phi_m = linspace(0, 11, 12)
+        phi_p = linspace(0, 11, 12)
+        #X,Y = meshgrid(phi_p, phi_m)
+        fig, ax = plt.subplots()
+        #p = ax.pcolor(X[:,0:11]/(1), Y[:,0:11]/(1), V, cmap=cm.RdBu, vmin=abs(V).min(), vmax=abs(V).max())
+        #cb = fig.colorbar(p, ax=ax)
+        ax.set_xticks(np.arange(0,12,1))
+        ax.set_yticks(np.arange(0,12,1))
+        plt.grid()
+
+        for i in xrange(11):
+            for j in xrange(11):
+                v = round(V[i][j],2)
+                if v == 10: 
+                    v = round(v,1) # in order too pretty print
+                ax.annotate(str(v),xy=(i+0.25,j+0.35))
+
+        show()
+
+#-----------------------------------------------------------------------------
+
+    def R(self, s):
         predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
         if s == predPos:
             return 10
         else:
             return 0
 
-    def transitionModel(self, s,a): # returns a dictionary {s': prob, ...}
+    def P(self, s,a): # returns a dictionary {s': prob, ...}
         predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
         if s == predPos: #absorbing state
             return {s: 1}
         else:
-            # halfwayState = (s[0]+REVEFFECTS[a][0]%self.boardSize[0], s[1]+REVEFFECTS[a][1]%self.boardSize[1])
             halfwayState = ((s[0]+REVEFFECTS[a][0])%self.boardSize[0], (s[1]+REVEFFECTS[a][1])%self.boardSize[1])
-            # print 'halfwayState: ', halfwayState
             if halfwayState == predPos: #no escape possible
                 return {halfwayState: 1}
             else: 
@@ -228,10 +269,9 @@ class ValueIteration(Player):
                         policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, })
                         actionValues = {}
                         for a, p_a in policy[s].items(): #for each action predator considers
-                            actionValues[a] = 0
-                            sPrimes = self.transitionModel(s, a)
+                            sPrimes = self.P(s, a)
                             for sPrime, p_sPrime in sPrimes.items():
-                                actionValues[a] += p_a * p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
+                                actionValues[a] = actionValues.get(a, 0) + p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
                         v = max(actionValues.values()) #key diff between Policy Iteration and Value Iteration!
                         delta = max(delta, abs(v - V[s])) 
                         vCopy[s] = v #V[s] = v
@@ -242,12 +282,12 @@ class ValueIteration(Player):
             for s in policy:
                 v = 0
                 if s != (5,5): #TODO: terminal state not part of S?
-                    actionValues = [0, 0, 0, 0, 0]
+                    actionValues = {}
                     for a in xrange(5): #for each possible action 
-                        sPrimes = self.transitionModel(s,a)
+                        sPrimes = self.P(s,a)
                         for sPrime, p_sPrime in sPrimes.items():
-                            actionValues[a] += p_sPrime * (self.reward(sPrime) + gamma * V[sPrime])
-                    greadyActions = [i for i, v in enumerate(actionValues) if v == max(actionValues)]
+                            actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+                    greadyActions = [i for i, v in actionValues.items() if v == max(actionValues.values())]
                     p = 1/float(len(greadyActions))
                     oldPolicy = set(policy[s].keys()) 
                     policy[s] = {}
@@ -261,24 +301,38 @@ class ValueIteration(Player):
         np.set_printoptions(suppress=True)
         print V
         print 'delta: ', delta
-        print policy
+        self.printPolicy(policy)
         sys.exit()
 
-    def reward(self, s):
+    def R(self, s):
         predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
         if s == predPos:
             return 10
         else:
             return 0
 
-    def transitionModel(self, s,a): # returns a dictionary {s': prob, ...}
+    def printPolicy(self, p):
+        for i in xrange(self.boardSize[0]):
+            print 
+            for j in xrange(self.boardSize[1]):
+                a = p.get((i,j), {0: 1.0}).keys()[0],
+                if a == (1,):
+                    print 2,
+                elif a == (2,): 
+                    print 1,
+                elif a == (3,):
+                    print 4,
+                elif a == (4,):
+                    print 3,
+                else:
+                    print 0,
+
+    def P(self, s,a): # returns a dictionary {s': prob, ...}
         predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
         if s == predPos: #absorbing state
             return {s: 1}
         else:
-            # halfwayState = (s[0]+REVEFFECTS[a][0]%self.boardSize[0], s[1]+REVEFFECTS[a][1]%self.boardSize[1])
             halfwayState = ((s[0]+REVEFFECTS[a][0])%self.boardSize[0], (s[1]+REVEFFECTS[a][1])%self.boardSize[1])
-            # print 'halfwayState: ', halfwayState
             if halfwayState == predPos: #no escape possible
                 return {halfwayState: 1}
             else: 
@@ -296,6 +350,8 @@ class ValueIteration(Player):
 
     def getAction(self, observation, id):
         return 4
+
+
 class Qlearning(Player):
     """docstring for Qlearning"""
     def __init__(self, gameInstance):
@@ -343,13 +399,13 @@ class Qlearning(Player):
             print self.actions[id]
         return self.actions[id]
 
-    def finalize(self, reward, observation, id):
+    def finalize(self, R, observation, id):
         if id == 0 and self.training == 1:
             #Qlearn
             self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.agents))
             newState = self.getStateRep(observation, id)
-            self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (reward + self.gamma * max(self.Qtable.get(newState, [self.Qinitval]*5**len(self.agents))) - self.Qtable[self.state][self.action])
-            # print 'state: ', self.state, 'action: ', self.action, 'reward: ', reward 
+            self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (R + self.gamma * max(self.Qtable.get(newState, [self.Qinitval]*5**len(self.agents))) - self.Qtable[self.state][self.action])
+            # print 'state: ', self.state, 'action: ', self.action, 'R: ', R 
 
     def quit(self, id):
         if id == 0 and self.training == 1:
