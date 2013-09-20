@@ -2,7 +2,7 @@ import random, sys, pygame, pickle, numpy as np
 from pygame.locals import *
 from locals import *
 import matplotlib.pyplot as plt
-from pylab import *
+#from pylab import *
 
 
 class Agent(object):
@@ -95,7 +95,7 @@ class RandomComputer(Player):
     def getAction(self, observation, id):
         if self.agents[id].role == 'prey':
             #STAY with a given probability
-            rand = random.random()
+            rand =random.random()
             if rand <= 0.8: 
                 return STAY
             else: #find actions that don't cause shared position
@@ -108,310 +108,169 @@ class RandomComputer(Player):
                 for freeAdjacentTile in freeAdjacentTiles:
                     possibleActions.append(self.tile2Action(self.agents[id].POS, freeAdjacentTile))
                 #remaining actions have equal probability
-                rand = random.random()
-                chance = float(1) / len(possibleActions)
-                return possibleActions[int(rand / chance)] 
+                return possibleActions[int(random.random()*len(possibleActions))] 
 
         if self.agents[id].role == 'predator':
             return random.randint(0,4) 
 
-class PolicyIteration(Player):
-    """docstring for PolicyIteration"""
+class GeneralizedPolicyIteration(Player):
+    """Implementation of Policy Iteration and Value Iteration, works for 2 player case when fullfilling the role of predator"""
 
     def __init__(self, gameInstance):
-        super(PolicyIteration,self).__init__(gameInstance)
+        super(GeneralizedPolicyIteration,self).__init__(gameInstance)
         Vinitval = 0
         V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 player scenario
-        threshold = 0.01 #TODO: change to sensible value
+        threshold = 0.00000001 #TODO: change to sensible value
         gamma = 0.8
+        terminalState = (self.boardSize[0]/2, self.boardSize[1]/2)
         policy = {}
+        deltas = []
+        valueIteration = True #stops after one sweep of evaluation and updates V differently (argmax)
+        k = None #number of evaluation sweeps per iteration
 
         while True:
-            #   policy evaluation
-            while True:
+
+            #Policy Evaluation
+            while k > 0 or k == None:
                 delta = 0
                 vCopy = V.copy()
                 for i in xrange(V.shape[0]): #for each state
                     for j in xrange(V.shape[1]):
                         s = (i, j)
                         v = 0
-                        if s != (5,5): #TODO: terminal state not part of S?
-                            policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, })
-                            for a,p_a in policy[s].items(): #for each action predator considers
-                                sPrimes = self.P(s,a)
+                        if s != terminalState: #terminal state not part of S
+                            policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2})
+                            actionValues = {}
+                            for a, p_a in policy[s].items(): #for each action predator considers
+                                sPrimes = self.P(s, a)
                                 for sPrime, p_sPrime in sPrimes.items():
-                                    v += p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+                                    if valueIteration:
+                                        actionValues[a] = actionValues.get(a, 0) + p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+                                    else: 
+                                        v += p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
+                            if valueIteration:
+                                v = max(actionValues.values()) #key diff between Policy Iteration and Value Iteration!
                             delta = max(delta, abs(v - V[s])) 
                             vCopy[s] = v #V[s] = v
                 V = vCopy
-                np.set_printoptions(precision=1)
-                np.set_printoptions(suppress=True)
-                print V
-                print 'delta: ', delta
                 if delta < threshold:
                     break
 
-            #   policy improvement
+            #Policy Improvement
             policyChanged = False
             for s in policy:
                 v = 0
-                if s != (5,5): #TODO: terminal state not part of S?
+                if s != terminalState: #terminal state not part of S
                     actionValues = {}
                     for a in xrange(5): #for each possible action 
                         sPrimes = self.P(s,a)
                         for sPrime, p_sPrime in sPrimes.items():
                             actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
-                    greadyActions = [i for i, v in actionValues.items() if 
-                    v < max(actionValues.values()) + 0.00001 and v > max(actionValues.values()) - 0.00001]
-                    p = 1/float(len(greadyActions))
+                    greedyActions = [i for i, v in actionValues.items() if 
+                    v < max(actionValues.values()) + 0.00000001 and v > max(actionValues.values()) - 0.00000001] # small intervall to cope with numerical errors
+                    p = 1/float(len(greedyActions))
                     oldPolicy = set(policy[s].keys()) 
                     policy[s] = {}
-                    for a in greadyActions:
+                    for a in greedyActions:
                         policy[s][a] = p
+
                     if oldPolicy != set(policy[s].keys()):
                         policyChanged = True
-            if policyChanged == False:
-                break
-        self.printPolicy(policy)
-        print V[(0,9)]
-        print V[(1,10)]
-        s = (0,8)
-        actionValues = {}
-        for a in xrange(5): #for each possible action 
-            sPrimes = self.P(s,a)
-            for sPrime, p_sPrime in sPrimes.items():
-                actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
-        print actionValues
 
-        self.printV(V)
+            if not policyChanged:
+                break
+
+            if valueIteration: # Value Iteration just updates policy once
+                break
+
+        self.policy = policy
+
+
+        # fig, sp1 = plt.subplots(figsize=(12,5))
+        # sp1.plot(deltas)
+        # sp1.set_xlabel('iterations')
+        # sp1.set_ylabel('delta')
+        # sp1.set_title('Policy iteration convergence using gamma of 0.9');
+        # plt.show()
+
+        np.set_printoptions(precision=2)
+        np.set_printoptions(suppress=True)
+        print V
+        self.printPolicy(policy)
         sys.exit()
+
+
+    # Reward function
+    def R(self, s): 
+        terminalState = (self.boardSize[0]/2, self.boardSize[1]/2)
+        if s == terminalState:
+            return 10
+        else:
+            return 0
+
+    # Transition Probabillity function returns a dictionary {s': prob, ...}
+    def P(self, s,a): 
+        terminalState = (self.boardSize[0]/2, self.boardSize[1]/2)
+        if s == terminalState: 
+            return {s: 1}
+        else:
+            halfwayState = ((s[0]+EFFECTS[a][0])%self.boardSize[0], (s[1]+EFFECTS[a][1])%self.boardSize[1])
+            if halfwayState == terminalState: #no escape possible
+                return {halfwayState: 1}
+            else: 
+                sPrimes = {}
+                for prey_a in xrange(1,5):
+                    sPrime =   ((halfwayState[0]+REVEFFECTS[prey_a][0])%self.boardSize[0], 
+                                (halfwayState[1]+REVEFFECTS[prey_a][1])%self.boardSize[1])
+                    if sPrime != terminalState:
+                        sPrimes[sPrime] = None
+                prob = 0.2/len(sPrimes) #now we know how many states follow, we know their probs
+                for sPrime in sPrimes:
+                    sPrimes[sPrime] = prob 
+                sPrimes[halfwayState] = 0.8 #prey stays at same location 
+                return sPrimes
+
+    def getStateRep(self, observation, id): #@overwrite since we're now interested at state rel to prey
+        state = []
+        for i in xrange(len(observation.positions)):
+            if i == self.agents[id].nr:
+                state.append(self.translatePos(self.agents[id].POS, observation.positions[i], self.boardSize))
+        return tuple(state) 
+
+    def getAction(self, observation, id):
+        state = self.getStateRep(observation, id)[0] # we know state will be ((y,x),)
+        actions = self.policy[state] 
+        rand = random.random()
+        accum = 0
+        for a in actions:
+            accum += actions[a] 
+            if rand <= accum:
+                return a
 
     def printPolicy(self, p):
         for i in xrange(self.boardSize[0]):
-            print '\n'
+            print 
             for j in xrange(self.boardSize[1]):
-                print p.get((i,j), {0: 1.0}).keys(), '\t',
-        print
+                if not (i,j) == (5,5):
+                    print p[i,j].keys(),
+                else:
+                    print 0, 
+        print 
 
-#-----------------------------------------------------------------------------
     def printV(self, V):
         phi_m = linspace(0, 11, 12)
         phi_p = linspace(0, 11, 12)
-        #X,Y = meshgrid(phi_p, phi_m)
         fig, ax = plt.subplots()
-        #p = ax.pcolor(X[:,0:11]/(1), Y[:,0:11]/(1), V, cmap=cm.RdBu, vmin=abs(V).min(), vmax=abs(V).max())
-        #cb = fig.colorbar(p, ax=ax)
         ax.set_xticks(np.arange(0,12,1))
         ax.set_yticks(np.arange(0,12,1))
         plt.grid()
 
         for i in xrange(11):
             for j in xrange(11):
-                v = round(V[i][j],2)
+                v = V[i][j]
                 if v == 10: 
                     v = round(v,1) # in order too pretty print
                 ax.annotate(str(v),xy=(i+0.25,j+0.35))
 
         show()
-
-#-----------------------------------------------------------------------------
-
-    def R(self, s):
-        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
-        if s == predPos:
-            return 10
-        else:
-            return 0
-
-    def P(self, s,a): # returns a dictionary {s': prob, ...}
-        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
-        if s == predPos: #absorbing state
-            return {s: 1}
-        else:
-            halfwayState = ((s[0]+REVEFFECTS[a][0])%self.boardSize[0], (s[1]+REVEFFECTS[a][1])%self.boardSize[1])
-            if halfwayState == predPos: #no escape possible
-                return {halfwayState: 1}
-            else: 
-                sPrimes = {}
-                for prey_a in xrange(1,5):
-                    sPrime =   ((halfwayState[0]+EFFECTS[prey_a][0])%self.boardSize[0], 
-                                (halfwayState[1]+EFFECTS[prey_a][1])%self.boardSize[1])
-                    if sPrime != predPos:
-                        sPrimes[sPrime] = None
-                prob = 0.2/len(sPrimes) #now we know how many states follow, we know their probs
-                for sPrime in sPrimes:
-                    sPrimes[sPrime] = prob 
-                sPrimes[halfwayState] = 0.8 #prey stays at same location 
-                return sPrimes
-
-    def getAction(self, observation, id):
-        return 4
-
-class ValueIteration(Player):
-    """docstring for ValueIteration"""
-    def __init__(self, gameInstance):
-        super(ValueIteration,self).__init__(gameInstance)
-        Vinitval = 0
-        V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 player scenario
-        threshold = 0.01 #TODO: change to sensible value
-        gamma = 0.8
-        policy = {}
-
-        #   policy evaluation
-        while True:
-            delta = 0
-            vCopy = V.copy()
-            for i in xrange(V.shape[0]): #for each state
-                for j in xrange(V.shape[1]):
-                    s = (i, j)
-                    v = 0
-                    if s != (5,5): #TODO: terminal state not part of S?
-                        policy[s] = policy.get(s, {0: 0.2, 1: 0.2, 2: 0.2, 3: 0.2, 4: 0.2, })
-                        actionValues = {}
-                        for a, p_a in policy[s].items(): #for each action predator considers
-                            sPrimes = self.P(s, a)
-                            for sPrime, p_sPrime in sPrimes.items():
-                                actionValues[a] = actionValues.get(a, 0) + p_a * p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
-                        v = max(actionValues.values()) #key diff between Policy Iteration and Value Iteration!
-                        delta = max(delta, abs(v - V[s])) 
-                        vCopy[s] = v #V[s] = v
-            V = vCopy
-
-            #   policy improvement
-            policyChanged = False
-            for s in policy:
-                v = 0
-                if s != (5,5): #TODO: terminal state not part of S?
-                    actionValues = {}
-                    for a in xrange(5): #for each possible action 
-                        sPrimes = self.P(s,a)
-                        for sPrime, p_sPrime in sPrimes.items():
-                            actionValues[a] = actionValues.get(a, 0) + p_sPrime * (self.R(sPrime) + gamma * V[sPrime])
-                    greadyActions = [i for i, v in actionValues.items() if v == max(actionValues.values())]
-                    p = 1/float(len(greadyActions))
-                    oldPolicy = set(policy[s].keys()) 
-                    policy[s] = {}
-                    for a in greadyActions:
-                        policy[s][a] = p
-
-            if delta < threshold:
-                break
-
-        np.set_printoptions(precision=1)
-        np.set_printoptions(suppress=True)
-        print V
-        print 'delta: ', delta
-        self.printPolicy(policy)
-        sys.exit()
-
-    def R(self, s):
-        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
-        if s == predPos:
-            return 10
-        else:
-            return 0
-
-    def printPolicy(self, p):
-        for i in xrange(self.boardSize[0]):
-            print 
-            for j in xrange(self.boardSize[1]):
-                a = p.get((i,j), {0: 1.0}).keys()[0],
-                if a == (1,):
-                    print 2,
-                elif a == (2,): 
-                    print 1,
-                elif a == (3,):
-                    print 4,
-                elif a == (4,):
-                    print 3,
-                else:
-                    print 0,
-
-    def P(self, s,a): # returns a dictionary {s': prob, ...}
-        predPos = (self.boardSize[0]/2, self.boardSize[1]/2)
-        if s == predPos: #absorbing state
-            return {s: 1}
-        else:
-            halfwayState = ((s[0]+REVEFFECTS[a][0])%self.boardSize[0], (s[1]+REVEFFECTS[a][1])%self.boardSize[1])
-            if halfwayState == predPos: #no escape possible
-                return {halfwayState: 1}
-            else: 
-                sPrimes = {}
-                for prey_a in xrange(1,5):
-                    sPrime =   ((halfwayState[0]+EFFECTS[prey_a][0])%self.boardSize[0], 
-                                (halfwayState[1]+EFFECTS[prey_a][1])%self.boardSize[1])
-                    if sPrime != predPos:
-                        sPrimes[sPrime] = None
-                prob = 0.2/len(sPrimes) #now we know how many states follow, we know their probs
-                for sPrime in sPrimes:
-                    sPrimes[sPrime] = prob 
-                sPrimes[halfwayState] = 0.8 #prey stays at same location 
-                return sPrimes
-
-    def getAction(self, observation, id):
-        return 4
-
-
-class Qlearning(Player):
-    """docstring for Qlearning"""
-    def __init__(self, gameInstance):
-        super(Qlearning,self).__init__(gameInstance)
-        self.QtableFN = 'singlePlayer.p'
-        self.training = 0
-        self.Qinitval = 2
-        self.alpha = 0.5
-        self.gamma = 0.7
-        self.epsilon = 0.05 
-        if not self.training:  # don't select suboptimal actions if not training!
-            self.epsilon = 0 # amounts to greedy action selection
-        try:
-            self.Qtable = pickle.load(open( self.QtableFN, "rb"))
-            print 'Qtable found and loaded'
-        except:
-            print 'Qtable not found, creating new'
-            self.Qtable = {}
-    
-    def getAction(self, observation, id): 
-        if id == 0:
-            self.shape = tuple([5]*len(self.agents)) # TODO: preferably init only once!
-            self.state = self.getStateRep(observation, id)
-            print 'state: ', self.state
-            possActions = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.agents))
-            maxval = max(possActions)
-
-            ind = [i for i, v in enumerate(possActions) if v != maxval]
-            if random.random() < self.epsilon and len(ind) != 0:
-                #select sub optimal action with eps prob if present
-                rand = random.random()
-                chance = float(1) / len(ind)
-                self.action = ind[int(rand / chance)]
-                #print 'returning from suboptimal possActions', ind, 'action', self.action
-            else:
-                #select from max possActions with 1-eps prob
-                ind = [i for i, v in enumerate(possActions) if v == maxval]
-                rand = random.random()
-                chance = float(1) / len(ind)
-                self.action = ind[int(rand / chance)]
-                #print 'returning from max possActions', ind, 'action', self.action
-
-            # print 'action: ', self.action
-            self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each agent
-            print self.actions[id]
-        return self.actions[id]
-
-    def finalize(self, R, observation, id):
-        if id == 0 and self.training == 1:
-            #Qlearn
-            self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.agents))
-            newState = self.getStateRep(observation, id)
-            self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (R + self.gamma * max(self.Qtable.get(newState, [self.Qinitval]*5**len(self.agents))) - self.Qtable[self.state][self.action])
-            # print 'state: ', self.state, 'action: ', self.action, 'R: ', R 
-
-    def quit(self, id):
-        if id == 0 and self.training == 1:
-            try:
-                pickle.dump(self.Qtable, open('agent' + str(self.agents[id].nr) + self.QtableFN, "wb" ), pickle.HIGHEST_PROTOCOL)
-            except:
-                print self.QtableFN + str(self.agents[id].nr)
-                print "agent %s can't write Qtable" % self.agents[id].nr
 

@@ -14,22 +14,20 @@ class Game(object, ):
         self.agents = [] 
         self.fixedInitPositions = [(0,0), (5,5)]
         reInitmode = 'fixed' # 'random' #
-        assignment = 1
         verbose = 1
         draw = 0
         episodes = 2  
         rnds = 2 #100 
 
-
+        pygame.init()
         if draw:
             #set up the window
-            pygame.init()
             fpsClock = pygame.time.Clock()
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), self.boardSize)
        
         # instantiate agents
-        player1 = Human(self)
-        player2 = PolicyIteration(self) #RandomComputer(self)#
+        player1 = GeneralizedPolicyIteration(self)
+        player2 = Human(self) #RandomComputer(self)#
 
         self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
         self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))
@@ -43,7 +41,8 @@ class Game(object, ):
         turn = 0
         caught = 0
 
-        while True: #the main game loop
+        #Main Game Loop
+        while True: 
             if draw:
                 self.screen.draw(turn, caught, self.agents)
                 self.screen.handleUserInput() #listen for Quit events etc.
@@ -85,8 +84,8 @@ class Game(object, ):
                             print [agent.POS for agent in self.agents]
                     else:
                         activeAgent += 1
-         
-            fpsClock.tick(30)
+            if draw:
+                fpsClock.tick(30)
 
     def getObservation(self, agentNr, observability):
         #positions also contains own position!
