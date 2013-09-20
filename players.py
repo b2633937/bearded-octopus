@@ -2,8 +2,8 @@ import random, sys, pygame, pickle, numpy as np
 from pygame.locals import *
 from locals import *
 import matplotlib.pyplot as plt
-#from pylab import *
 
+""" Contains all the different Brain types"""
 
 class Agent(object):
     def __init__(self, player, role, nr, img):

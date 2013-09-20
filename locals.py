@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pygame
 
+"""Declaring some helpfull constants used throughout the other files"""
+
 #------------------- define COLORS -------------------
 WHITE    = (255, 255, 255)
 DARKGRAY = ( 70,  70,  70)

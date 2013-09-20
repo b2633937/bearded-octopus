@@ -7,6 +7,8 @@ from pygame.locals import *
 from players import *
 from locals import *
 
+"""Central File which runs a game instance called through assignment_x.py"""
+
 class Game(object, ):
 
     def __init__(self):
@@ -25,14 +27,14 @@ class Game(object, ):
             fpsClock = pygame.time.Clock()
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), self.boardSize)
        
-        # instantiate agents
+        # instantiate players (these are the brains controllling one or more agents)
         player1 = GeneralizedPolicyIteration(self)
         player2 = Human(self) #RandomComputer(self)#
 
+        #instantiate agents (each player can have multiple agents)
         self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
         self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))
         self.initPositions(reInitmode)
-
 
         episode = 0
         rnd = 0
