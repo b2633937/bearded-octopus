@@ -12,8 +12,6 @@ class Player(object):
         super(Player, self).__init__()
         self.agent = agent 
         self.role = None 
-        # self.img = img 
-        # self.pos = None
         self.nr = None # player number in game 
         self.observation = None
         self.id = agent.addPlayer(self) # player number in agent 
@@ -26,8 +24,7 @@ class Player(object):
             self.nr = observation.playerNr
             self.role = observation.roles[self.nr] 
             self.pos = observation.positions[self.nr]
-            self.agent.boardSize = observation.boardSize
-
+            self.boardSize = observation.boardSize
 
     def finalize(self, reward):
         self.agent.finalize(reward, self.id) 
@@ -39,29 +36,28 @@ class Agent(object):
     def __init__(self):
         super(Agent, self).__init__()
         self.players = []
-        self.boardSize = None
 
     def addPlayer(self, player):
         self.players.append(player)
         return len(self.players)-1
 
-    def getStateRep(self, observation, id):
-        # self.players[id].pos = observation.positions[self.players[id].nr]
+    def getStateRep(self, id):
         state = []
-        for i in xrange(len(observation.positions)):
+        for i in xrange(len(self.players[id].observation.positions)):
             if i != self.players[id].nr:
-                state.append(self.translatePos(self.players[id].pos, observation.positions[i], self.boardSize))
+                state.append(self.translatePos(self.players[id].pos, self.players[id].observation.positions[i], self.players[id].observation.boardSize))
         return tuple(state) 
 
-    def action2Tile(self, action, position):
-        return ((position[0]+EFFECTS[action][0])%self.boardSize[0], 
-            (position[1]+EFFECTS[action][1])%self.boardSize[1])
+    def action2Tile(self, action, position, boardSize):
+        return ((position[0]+EFFECTS[action][0])%boardSize[0], 
+            (position[1]+EFFECTS[action][1])%boardSize[1])
 
-    def tile2Action(self, basePosition, adjacentTile):
-        if adjacentTile == self.action2Tile(UP, basePosition): return UP
-        if adjacentTile == self.action2Tile(DOWN, basePosition): return DOWN
-        if adjacentTile == self.action2Tile(LEFT, basePosition): return LEFT
-        if adjacentTile == self.action2Tile(RIGHT, basePosition): return RIGHT
+
+    def tile2Action(self, basePosition, adjacentTile, boardSize):
+        if adjacentTile == self.action2Tile(UP, basePosition, boardSize): return UP
+        if adjacentTile == self.action2Tile(DOWN, basePosition, boardSize): return DOWN
+        if adjacentTile == self.action2Tile(LEFT, basePosition, boardSize): return LEFT
+        if adjacentTile == self.action2Tile(RIGHT, basePosition, boardSize): return RIGHT
         if adjacentTile == basePosition: return STAY
 
     def translatePos(self, ownPos, otherPos, boardSize): 
@@ -170,14 +166,16 @@ class RandomComputer(Agent):
             if rand <= 0.8: 
                 return STAY
             else: #find actions that don't cause shared position
-                adjacent = set([self.action2Tile(UP, self.players[id].pos),
-                                self.action2Tile(DOWN, self.players[id].pos),
-                                self.action2Tile(LEFT, self.players[id].pos),
-                                self.action2Tile(RIGHT, self.players[id].pos)])
+                pos = self.players[id].pos
+                boardSize = self.players[id].boardSize
+                adjacent = set([self.action2Tile(UP, pos, boardSize),
+                                self.action2Tile(DOWN, pos, boardSize),
+                                self.action2Tile(LEFT, pos, boardSize),
+                                self.action2Tile(RIGHT, pos, boardSize)])
                 freeAdjacentTiles = adjacent - set(self.players[id].observation.positions)
                 possibleActions = []
                 for freeAdjacentTile in freeAdjacentTiles:
-                    possibleActions.append(self.tile2Action(self.players[id].pos, freeAdjacentTile))
+                    possibleActions.append(self.tile2Action(pos, freeAdjacentTile, boardSize))
                 #remaining actions have equal probability
                 return possibleActions[int(random.random()*len(possibleActions))] 
 
@@ -189,6 +187,7 @@ class GeneralizedPolicyIteration(Agent):
 
     def __init__(self):
         super(GeneralizedPolicyIteration,self).__init__()
+        self.boardSize = (11,11) #TODO: Solve elegantly!
         Vinitval = 0
         V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 agent scenario
         threshold = 0.001 #0.00000001 #TODO: change to sensible value
@@ -313,7 +312,7 @@ class GeneralizedPolicyIteration(Agent):
                 return sPrimes
 
     def getStateRep(self, id): #@overwrite since we're now interested at state rel to prey
-        self.players[id].pos = observation.positions[self.players[id].nr]
+        # self.players[id].pos = observation.positions[self.players[id].nr]
         state = []
         for i in xrange(len(self.players[id].observation.positions)):
             if i != self.players[id].nr:
