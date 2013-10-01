@@ -1,172 +1,180 @@
-import pygame, sys
-import random
-import pickle 
-import numpy as np
-import matplotlib.pyplot as plt
+import pygame, sys, random, pickle, numpy as np, matplotlib.pyplot as plt
 from pygame.locals import *
 from players import *
 from locals import *
 
 """Central File which runs a game instance called through assignment_x.py"""
 
-class Game(object, ):
+class Game(object):
 
-    def __init__(self):
-        self.boardSize = (11, 11)
-        self.agents = [] 
-        self.fixedInitPositions = [(0,0), (5,5)]
-        reInitmode = 'fixed' # 'random' #
-        verbose = 1
-        draw = 0
-        episodes = 2  
-        rnds = 2 #100 
+    def __init__(self, boardSize, verbose, draw, rounds, episodes):
+        self.settings = type('Settings', (object,), dict(
+            boardSize = boardSize,
+            verbose = verbose,
+            draw = draw,
+            rounds = rounds,
+            episodes = episodes,
+            fixedInitPositions = [],
+            playerImages = [],
+            playerRoles = [],
+            nroPlayers = 0
+            ))
+        self.players = []
+
+
+    def play(self):
+        settings = self.settings
+        state = State()
+        stats = np.zeros((settings.rounds, settings.episodes))
 
         pygame.init()
-        if draw:
+        if settings.draw:
             #set up the window
             fpsClock = pygame.time.Clock()
-            self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), self.boardSize)
+            self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), settings.boardSize)
        
-        # instantiate players (these are the brains controllling one or more agents)
-        player1 = GeneralizedPolicyIteration(self)
-        player2 = Human(self) #RandomComputer(self)#
-
-        #instantiate agents (each player can have multiple agents)
-        self.agents.append(Agent(player = player1, role='predator', nr=len(self.agents), img=IMAGES['boy']))
-        self.agents.append(Agent(player = player2, role='prey', nr=len(self.agents), img=IMAGES['princess']))
-        self.initPositions(reInitmode)
-
-        episode = 0
-        rnd = 0
-        stats = np.zeros((episodes, rnds))
-        activeAgent = 0
-        turn = 0
-        caught = 0
-
+        self.initPositions(settings, state)
+        activePlayerNr = 0
         #Main Game Loop
         while True: 
-            if draw:
-                self.screen.draw(turn, caught, self.agents)
+            if settings.draw:
+                self.screen.draw(settings, state, self.players)
                 self.screen.handleUserInput() #listen for Quit events etc.
 
-            if self.gameEnds(): #check for game end
+            if self.gameEnds(state): #check for game end
                 SOUNDS['caught'].play()
-                self.initPositions(reInitmode)
-                stats[episode, rnd] = turn
-                caught += 1
-                turn = 0
-                activeAgent = 0
-                rnd += 1
-                if rnd == rnds:
-                    for agent in self.agents:
-                        agent.quit()
-                    episode += 1
-                    rnd = 0
-                    turn = 0
-                    caught = 0
-                    if episode == episodes:
+                self.initPositions(settings, state)
+                stats[state.rnd, state.episode] = state.turn
+                state.caught += 1 #TODO: check if episode ended caused by duplicate pred pos
+                state.turn = 0
+                self.activePlayerNr = 0
+                state.episode += 1
+                if state.episode == settings.episodes:
+                    for player in self.players:
+                        player.quit() #allows saving files etc.
+                    state.caught = 0
+                    state.rnd += 1
+                    if rnd == settings.rounds:
                         pygame.quit()
-                        self.processResults(stats, rnds, episodes)
-                        sys.exit()
+                        return self.processResults(stats, settings.episodes, settings.rounds)
             else:
-                #Agent takes move 
-                observation = self.getObservation(activeAgent, observability = 'fo')
-                action = self.agents[activeAgent].getAction(observation)
-
+                #Agent has to take move 
+                self.players[activePlayerNr].observe(self.getObservation(settings, state, activePlayerNr, observability = 'fo'))
+                action = self.players[activePlayerNr].getAction()
                 if action != None: 
-                    self.agents[activeAgent].POS = self.transition(self.getState(), action, activeAgent)
-                    observation = self.getObservation(activeAgent, observability = 'fo')
-                    reward = self.getReward(self.agents[activeAgent].role)
-                    self.agents[activeAgent].finalize(reward, observation)
-                    #pass turn to next agent
-                    if activeAgent == len(self.agents)-1:
-                        activeAgent = 0
-                        turn += 1
-                        if assignment == 1 and verbose:
-                            print [agent.POS for agent in self.agents]
+                    self.stateTransition(settings, state, action, activePlayerNr)
+                    self.players[activePlayerNr].observe(self.getObservation(settings, state, activePlayerNr, observability = 'fo'))
+                    reward = self.getReward(settings, state, action)
+                    self.players[activePlayerNr].finalize(reward)
+                    #pass turn to next player
+                    if activePlayerNr == len(self.players)-1:
+                        activePlayerNr = 0
+                        state.turn += 1
+                        if settings.verbose:
+                            print state.positions
                     else:
-                        activeAgent += 1
-            if draw:
+                        activePlayerNr += 1
+            if settings.draw:
                 fpsClock.tick(30)
 
-    def getObservation(self, agentNr, observability):
-        #positions also contains own position!
+    def addPlayer(self, player, role, fixedInitPos, img):
+        player.nr = len(self.players) 
+        self.players.append(player)
+        self.settings.fixedInitPositions.append(fixedInitPos)
+        self.settings.playerImages.append(img)
+        self.settings.playerRoles.append(role)
+        self.settings.nroPlayers += 1
+
+    def getObservation(self, settings, state, playerNr, observability):
         if observability == 'fo': #full obervability
-            return Observation(self.getState())
+            return Observation(settings, state, playerNr)
         else: 
             sys.exit('ERROR: unknown observability parameter')
 
-    def getState(self):
-        return [agent.POS for agent in self.agents]
+    def stateTransition(self, settings, state, action, playerNr):
+        state.positions[playerNr] = ((state.positions[playerNr][0]+EFFECTS[action][0])%settings.boardSize[0], 
+            (state.positions[playerNr][1]+EFFECTS[action][1])%settings.boardSize[1])
 
-    def transition(self, state, action, agentNr):
-        return ((self.agents[agentNr].POS[0]+EFFECTS[action][0])%self.boardSize[0], 
-            (self.agents[agentNr].POS[1]+EFFECTS[action][1])%self.boardSize[1])
+    def gameEnds(self, state): #game ends if any 2 players share same position
+        return len(set(state.positions)) != len(self.players)
 
-    def gameEnds(self): #game ends if any 2 agents share same position
-        s = set()
-        for agent in self.agents:
-            s.add(agent.POS)
-        return len(s) != len(self.agents)
-
-    def getReward(self, role): 
+    def getReward(self, settings, state, action): 
         nroPreds = 0
         preds = set()
         s = set()
         reward = 0
-        for agent in self.agents:
-            if agent.role == 'predator':
+        for i in xrange(settings.nroPlayers):
+        # for player in self.players:
+            if settings.playerRoles[i] == PREDATOR:
                 nroPreds += 1
-                preds.add(agent.POS)
-            s.add(agent.POS)
+                preds.add(state.positions[i])
+            s.add(state.positions[i])
         if len(preds) != nroPreds:
             #two predators share position
             reward = -10
-        elif len(s) != len(self.agents):
+        elif len(s) != len(self.players):
             #a predator shares position with prey
             reward = 10 
-        if role == 'prey':
+        if settings.playerRoles[i] == PREY:
             #reverse reward
             reward *= -1
             if reward > 0: # prey gets no reward if 2 predators collide
                 reward = 0
         return reward
 
-    def initPositions(self, mode):
-        if mode == 'random': #still prevent agents from getting same initial position
-            positions = set()
-            for agent in self.agents:
-                position = (random.randint(0,self.boardSize[0]-1), random.randint(0,self.boardSize[1]-1))
-                while position in positions: 
-                    position = (random.randint(0,self.boardSize[0]-1), random.randint(0,self.boardSize[1]-1))
-                agent.POS = position
-        if mode == 'fixed':
-            for i in xrange(len(self.agents)):
-                self.agents[i].POS = self.fixedInitPositions[i]
+    def initPositions(self, settings, state):
+        #give all fixedPos player their position
+        positionSet = set()
+        positions = [None]*len(self.players)
+        for i in xrange(len(self.players)):
+            if settings.fixedInitPositions[i] != None:
+                positions[i] = settings.fixedInitPositions[i]
+                positionSet.add(settings.fixedInitPositions[i])
+        #now give all None fixedPos players a position
+        for i in xrange(len(positions)):
+            if positions[i] == None:
+                while True: 
+                    position = (random.randint(0,settings.boardSize[0]-1), random.randint(0,settings.boardSize[1]-1))
+                    if position not in positionSet:
+                        break
+                positions[i] = position
+        state.positions = positions
 
-    def processResults(self, stats, rnds, episodes):
+    def processResults(self, stats, episodes, rnds):
         try:
             pickle.dump(stats, open('stats', "wb"), pickle.HIGHEST_PROTOCOL)    
         except:
             print "can't write stats file"
-
-        plt.figure('Results')
-        x = np.arange(1,rnds+1,1)
-        y = stats.sum(0) / float(episodes)
-        std = stats.std(0)
-        print x.shape
-        print y.shape
-        errorfill(x, y, std)
-        plt.show()
+        print stats
+        avg = stats.sum(1) / float(episodes)
+        std = stats.std(1)
+        print 'average of: ', avg
+        print 'standard deviation of: ', std
 
 
 #####################################################################################
 
 class Observation(object):
     """docstring for Observation"""
-    def __init__(self, positions):
+    def __init__(self, settings, state, playerNr):
         super(Observation, self).__init__()
-        self.positions = positions
+        self.playerNr = playerNr
+        self.roles = settings.playerRoles
+        self.positions = state.positions
+        self.boardSize = settings.boardSize
+
+
+class State(object):
+    """docstring for State"""
+    def __init__(self):
+        super(State, self).__init__()
+        self.positions = None
+        self.rnd = 0
+        self.episode = 0
+        self.turn = 0
+        self.caught = 0
+        self.activePlayerNr = 0
+
 
 class GameScreen(object):
     """docstring for GameScreen"""
@@ -209,7 +217,6 @@ class GameScreen(object):
 
             if event.type == MOUSEBUTTONUP:
                 mousex, mousey = event.pos
-
                 if self.quitTextRect.collidepoint(mousex, mousey):
                     pygame.quit()
                     sys.exit()
@@ -231,15 +238,15 @@ class GameScreen(object):
         screenY += 9 #TODO: handle picture ofsett
         self.displaySurf.blit(img, img.get_rect(center=(screenX,screenY)).topleft)
 
-    def draw(self, turn, caught, agents):
+    def draw(self, settings, state, players):
         self.displaySurf.fill(WHITE)
         self.displaySurf.blit(IMAGES['backgroundImg'], (self.boardOffsetX, self.boardoffsetY))
         self.drawBoard() 
-        for agent in agents:
-            self.draw2Tile(agent.POS, agent.img)
+        for i in xrange(len(players)):
+            self.draw2Tile(state.positions[i], settings.playerImages[i])
         self.displaySurf.blit(self.quitTextSurf, self.quitTextRect)
-        self.textSurfaceObj = self.fontObj.render('Turn: ' + str(turn), True, BLUE)
+        self.textSurfaceObj = self.fontObj.render('Turn: ' + str(state.turn), True, BLUE)
         self.displaySurf.blit(self.textSurfaceObj, self.textRectObj)
-        self.caughtTextSurf = self.fontObj.render('Caught: ' + str(caught), True, BLUE)
+        self.caughtTextSurf = self.fontObj.render('Caught: ' + str(state.caught), True, BLUE)
         self.displaySurf.blit(self.caughtTextSurf, self.caughtTextRect)
         pygame.display.update()

@@ -15,6 +15,10 @@ YELLOW   = (255, 255,   0)
 ORANGE   = (255, 128,   0)
 PURPLE   = (255,   0, 255)
 
+#------------------- available ROLES ------------------
+PREY = 0
+PREDATOR = 1
+
 #-------- available ACTIONS and their EFFECTS ---------
 STAY = 0
 UP = 1
@@ -30,8 +34,8 @@ IMAGES = {}
 backgroundImg = pygame.image.load('images/flippyboard.png')
 IMAGES['backgroundImg'] =  backgroundImg 
 #load agent images
-IMAGES['boy'] = pygame.image.load('images/princess.png')
-IMAGES['princess'] = pygame.image.load('images/boy.png')
+IMAGES['boy'] = pygame.image.load('images/boy.png')
+IMAGES['princess'] = pygame.image.load('images/princess.png')
 
 SOUNDS = {}
 pygame.mixer.init()
