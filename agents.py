@@ -68,11 +68,11 @@ class Agent(object):
     def getAction(self): 
         sys.exit("function getAction not implemented for player " + str(player.nr))
 
-    def eGreedy(self, possActions):
+    def eGreedy(self, possActions, epsilon):
         maxval = max(possActions)
         ind = [i for i, v in enumerate(possActions) if v == maxval]
-        if random.random() > self.epsilon:  #select optimal action with 1 - eps prob
-            action = ind[int(random.random() * len(ind))] 
+        if random.random() >= epsilon:  #select optimal action with 1 - eps prob
+            action = ind[int(random.random() * len(ind))] # Non-deterministic in a sense that it choses randomly amongst maxval actions 
         else:   #select random action (includes optimal action)
             action = int(random.random() * len(possActions))
         return action
@@ -89,16 +89,19 @@ class MonteCarlo(Agent):
     def __init__(self):
         super(MonteCarlo, self).__init__()
         
-class Qlearning(Agent):
-    """docstring for Qlearning"""
-    def __init__(self):
-        super(Qlearning,self).__init__()
+class TemporalDifference(Agent):
+    """docstring for TemporalDifference"""
+    def __init__(self, ):
+        super(TemporalDifference,self).__init__()
         self.QtableFN = 'singleAgent.p'
         self.training = 1
         self.Qinitval = 2
         self.alpha = 0.5
         self.gamma = 0.7
         self.epsilon = 0.05 
+        self.algorithm = 'Sarsa'#'Q-learning'
+        self.action = None #to store next action
+
         if not self.training:  # don't select suboptimal actions if not training!
             self.epsilon = 0 # amounts to greedy action selection
         try:
@@ -112,19 +115,29 @@ class Qlearning(Agent):
         if id == 0: #player 0 plans for all of the agent's players
             self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
             self.state = self.getStateRep(id)
-            print 'state: ', self.state
             possActions = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
-            self.action = self.eGreedy(possActions)
+            if self.algorithm == 'Q-learning':
+                self.action = self.eGreedy(possActions, self.epsilon)
+            elif self.algorithm == 'Sarsa':
+                if self.action == None: #only true for the first action 
+                    self.action = self.eGreedy(possActions, self.epsilon)
             self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each player
         return self.actions[id]
 
     def finalize(self, R, id):
         if id == 0 and self.training == 1:
-            #Qlearn
             self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
-            newState = self.getStateRep(id)
-            self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (R + self.gamma * max(self.Qtable.get(newState, [self.Qinitval]*5**len(self.players))) - self.Qtable[self.state][self.action])
-            # print 'state: ', self.state, 'action: ', self.action, 'R: ', R 
+            sPrime = self.getStateRep(id)
+
+            if self.algorithm == 'Q-learning':
+                aPrime = self.eGreedy(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), 0) #0-epsilon gives max action
+            if self.algorithm == 'Sarsa':
+                aPrime = self.eGreedy(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), self.epsilon)
+            
+            self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (R + self.gamma * self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players))[aPrime] - self.Qtable[self.state][self.action])
+            
+            if self.algorithm == 'Sarsa':
+                self.action = aPrime
 
     def quit(self, id):
         if id == 0 and self.training == 1:
@@ -182,11 +195,11 @@ class RandomComputer(Agent):
         if self.players[id].role == PREDATOR:
             return random.randint(0,4) 
 
-class GeneralizedPolicyIteration(Agent):
+class DynamicProgramming(Agent):
     """Implementation of Policy Iteration and Value Iteration, works for 2 agent case when fullfilling the role of predator"""
 
     def __init__(self):
-        super(GeneralizedPolicyIteration,self).__init__()
+        super(DynamicProgramming,self).__init__()
         self.boardSize = (11,11) #TODO: Solve elegantly!
         Vinitval = 0
         V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 agent scenario

@@ -33,8 +33,7 @@ class Game(object):
             fpsClock = pygame.time.Clock()
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), settings.boardSize)
        
-        self.initPositions(settings, state)
-        activePlayerNr = 0
+        self.initState(settings, state)
         #Main Game Loop
         while True: 
             if settings.draw:
@@ -43,11 +42,14 @@ class Game(object):
 
             if self.gameEnds(state): #check for game end
                 SOUNDS['caught'].play()
-                self.initPositions(settings, state)
+
+                for i in xrange(self.settings.nroPlayers):
+                    self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
+                    self.players[i].finalize(self.getReward(settings, state, i, action))                
+
+                self.initState(settings, state)
                 stats[state.rnd, state.episode] = state.turn
                 state.caught += 1 #TODO: check if episode ended caused by duplicate pred pos
-                state.turn = 0
-                self.activePlayerNr = 0
                 state.episode += 1
                 if state.episode == settings.episodes:
                     for player in self.players:
@@ -58,22 +60,17 @@ class Game(object):
                         pygame.quit()
                         return self.processResults(stats, settings.episodes, settings.rounds)
             else:
-                #Agent has to take move 
-                self.players[activePlayerNr].observe(self.getObservation(settings, state, activePlayerNr, observability = 'fo'))
-                action = self.players[activePlayerNr].getAction()
-                if action != None: 
-                    self.stateTransition(settings, state, action, activePlayerNr)
-                    self.players[activePlayerNr].observe(self.getObservation(settings, state, activePlayerNr, observability = 'fo'))
-                    reward = self.getReward(settings, state, action)
-                    self.players[activePlayerNr].finalize(reward)
-                    #pass turn to next player
-                    if activePlayerNr == len(self.players)-1:
-                        activePlayerNr = 0
-                        state.turn += 1
-                        if settings.verbose:
-                            print state.positions
-                    else:
-                        activePlayerNr += 1
+                #observe
+                self.players[state.activePlayerNr].observe(self.getObservation(settings, state, state.activePlayerNr, observability = 'fo'))
+                #finalize previous move now we know the new state
+                if state.turn != 0:
+                    self.players[state.activePlayerNr].finalize(self.getReward(settings, state, state.activePlayerNr, action))
+                #take new action
+                action = self.players[state.activePlayerNr].getAction()
+                #transit the world state
+                if action != None: #Human agents can take None action  
+                    self.stateTransition(settings, state, action, state.activePlayerNr)
+
             if settings.draw:
                 fpsClock.tick(30)
 
@@ -94,11 +91,17 @@ class Game(object):
     def stateTransition(self, settings, state, action, playerNr):
         state.positions[playerNr] = ((state.positions[playerNr][0]+EFFECTS[action][0])%settings.boardSize[0], 
             (state.positions[playerNr][1]+EFFECTS[action][1])%settings.boardSize[1])
+        #pass turn to next player
+        if playerNr == settings.nroPlayers-1:
+            state.activePlayerNr = 0
+            state.turn += 1
+        else:
+            state.activePlayerNr += 1
 
     def gameEnds(self, state): #game ends if any 2 players share same position
         return len(set(state.positions)) != len(self.players)
 
-    def getReward(self, settings, state, action): 
+    def getReward(self, settings, state, playerNr, action): 
         nroPreds = 0
         preds = set()
         s = set()
@@ -115,14 +118,14 @@ class Game(object):
         elif len(s) != len(self.players):
             #a predator shares position with prey
             reward = 10 
-        if settings.playerRoles[i] == PREY:
+        if settings.playerRoles[playerNr] == PREY:
             #reverse reward
             reward *= -1
             if reward > 0: # prey gets no reward if 2 predators collide
                 reward = 0
         return reward
 
-    def initPositions(self, settings, state):
+    def initState(self, settings, state):
         #give all fixedPos player their position
         positionSet = set()
         positions = [None]*len(self.players)
@@ -139,6 +142,8 @@ class Game(object):
                         break
                 positions[i] = position
         state.positions = positions
+        state.turn = 0
+        state.activePlayerNr = 0
 
     def processResults(self, stats, episodes, rnds):
         try:
