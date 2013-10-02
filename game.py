@@ -7,12 +7,11 @@ from locals import *
 
 class Game(object):
 
-    def __init__(self, boardSize, verbose, draw, rounds, episodes):
+    def __init__(self, boardSize, verbose, draw, episodes):
         self.settings = type('Settings', (object,), dict(
             boardSize = boardSize,
             verbose = verbose,
             draw = draw,
-            rounds = rounds,
             episodes = episodes,
             fixedInitPositions = [],
             playerImages = [],
@@ -25,7 +24,7 @@ class Game(object):
     def play(self):
         settings = self.settings
         state = State()
-        stats = np.zeros((settings.rounds, settings.episodes))
+        stats = np.zeros(settings.episodes)
 
         pygame.init()
         if settings.draw:
@@ -41,24 +40,22 @@ class Game(object):
                 self.screen.handleUserInput() #listen for Quit events etc.
 
             if self.gameEnds(state): #check for game end
-                SOUNDS['caught'].play()
+                if settings.draw:
+                    SOUNDS['caught'].play()
 
                 for i in xrange(self.settings.nroPlayers):
                     self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
                     self.players[i].finalize(self.getReward(settings, state, i, action))                
 
+                stats[state.episode] = state.turn
                 self.initState(settings, state)
-                stats[state.rnd, state.episode] = state.turn
                 state.caught += 1 #TODO: check if episode ended caused by duplicate pred pos
                 state.episode += 1
                 if state.episode == settings.episodes:
                     for player in self.players:
                         player.quit() #allows saving files etc.
-                    state.caught = 0
-                    state.rnd += 1
-                    if rnd == settings.rounds:
-                        pygame.quit()
-                        return self.processResults(stats, settings.episodes, settings.rounds)
+                    pygame.quit()
+                    return stats
             else:
                 #observe
                 self.players[state.activePlayerNr].observe(self.getObservation(settings, state, state.activePlayerNr, observability = 'fo'))
@@ -145,17 +142,6 @@ class Game(object):
         state.turn = 0
         state.activePlayerNr = 0
 
-    def processResults(self, stats, episodes, rnds):
-        try:
-            pickle.dump(stats, open('stats', "wb"), pickle.HIGHEST_PROTOCOL)    
-        except:
-            print "can't write stats file"
-        print stats
-        avg = stats.sum(1) / float(episodes)
-        std = stats.std(1)
-        print 'average of: ', avg
-        print 'standard deviation of: ', std
-
 
 #####################################################################################
 
@@ -174,7 +160,6 @@ class State(object):
     def __init__(self):
         super(State, self).__init__()
         self.positions = None
-        self.rnd = 0
         self.episode = 0
         self.turn = 0
         self.caught = 0
