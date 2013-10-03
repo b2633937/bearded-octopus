@@ -9,17 +9,16 @@ import matplotlib.pyplot as plt
 
 def main():
 
-
-
 	for i in xrange(1): #(5):
-		algorithm = 'Q-learning'
+		algorithm = 'Sarsa'
 		QtableFN = None  
 		Qinitval = 15
 		alpha = [0.1,0.2,0.3,0.4,0.5]
 		gamma = 0.7#[0.1,0.5,0.7,0.9]
-		epsilon = 0.1
+		selParam = 0.1 # selection parameter Tau or Epsilon
+		selAlgh = 'softMax'
 
-		rounds = 100
+		rounds = 1
 		episodes = 1000
 		stats = np.zeros((rounds, episodes))
 
@@ -31,7 +30,8 @@ def main():
 		        Qinitval = Qinitval,
 		        alpha = alpha[i],
 		        gamma = gamma,
-		        epsilon = epsilon
+		        selParam = selParam,
+		        selAlgh = selAlgh
 		 		)),role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy']) 
 		 	# game.addPlayer(Player(agent=DynamicProgramming()), role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy'])
 		 	game.addPlayer(Player(agent=RandomComputer()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
@@ -42,7 +42,7 @@ def main():
 		# print 'average of: ', avg
 		# print 'standard deviation of: ', std
 		try:
-		    pickle.dump(stats, open('stats'+algorithm+'a'+str(alpha)+'e'+str(epsilon)+'g'+str(gamma)+'i'+str(Qinitval)+'.p', "wb"), pickle.HIGHEST_PROTOCOL)    
+		    pickle.dump(stats, open('stats'+algorithm+'a'+str(alpha[i])+'e'+str(selParam)+'g'+str(gamma)+'i'+str(Qinitval)+'.p', "wb"), pickle.HIGHEST_PROTOCOL)    
 		except:
 		    print "can't write stats file"
 

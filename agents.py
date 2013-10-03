@@ -1,4 +1,4 @@
-import random, sys, pygame, pickle, numpy as np
+import random, sys, pygame, pickle, math, numpy as np
 from pygame.locals import *
 from locals import *
 import matplotlib.pyplot as plt
@@ -68,14 +68,33 @@ class Agent(object):
     def getAction(self): 
         sys.exit("function getAction not implemented for player " + str(player.nr))
 
-    def eGreedy(self, possActions, epsilon):
-        maxval = max(possActions)
-        ind = [i for i, v in enumerate(possActions) if v == maxval]
-        if random.random() >= epsilon:  #select optimal action with 1 - eps prob
+    def eGreedy(self, actionValues, selParam):
+        maxval = max(actionValues)
+        ind = [i for i, v in enumerate(actionValues) if v == maxval]
+        if random.random() >= selParam:  #select optimal action with 1 - eps prob
             action = ind[int(random.random() * len(ind))] # Non-deterministic in a sense that it choses randomly amongst maxval actions 
         else:   #select random action (includes optimal action)
-            action = int(random.random() * len(possActions))
+            action = int(random.random() * len(actionValues))
         return action
+
+    def softMax(self, actionValues, tau):
+        if tau == 0: #to prevent devision by zero 
+            return self.eGreedy(actionValues, tau) #return greedy action
+        else:    
+            tempValues = []
+            for i in xrange(len(actionValues)):
+                tempValues.append(math.e**(actionValues[i]/tau))  
+            actionProbs = []
+            for i in xrange(len(tempValues)):
+                actionProbs.append(tempValues[i]/sum(tempValues))
+            #now select an action according to their probability 
+            rand = random.random()
+            accum = 0
+            for i in xrange(len(actionProbs)):
+                accum += actionProbs[i]
+                if rand < accum:
+                    return i
+
 
     def finalize(self, R, id):
         pass
@@ -91,19 +110,20 @@ class MonteCarlo(Agent):
         
 class TemporalDifference(Agent):
     """docstring for TemporalDifference"""
-    def __init__(self, ):
+    def __init__(self, algorithm, QtableFN, Qinitval, alpha, gamma, selParam, selAlgh):
         super(TemporalDifference,self).__init__()
-        self.QtableFN = 'singleAgent.p'
-        self.training = 1
-        self.Qinitval = 2
-        self.alpha = 0.5
-        self.gamma = 0.7
-        self.epsilon = 0.05 
-        self.algorithm = 'Sarsa'#'Q-learning'
+        self.algorithm = algorithm
+        self.actionSelection = getattr(self, selAlgh)
+        self.QtableFN = QtableFN 
+        self.Qinitval = Qinitval
+        self.alpha = alpha
+        self.gamma = gamma
+        self.selParam = selParam # selection parameter Tau or Epsilon
         self.action = None #to store next action
+        self.training = 1 
 
         if not self.training:  # don't select suboptimal actions if not training!
-            self.epsilon = 0 # amounts to greedy action selection
+            self.selParam = 0 # amounts to greedy action selection
         try:
             self.Qtable = pickle.load(open( self.QtableFN, "rb"))
             print 'Qtable found and loaded'
@@ -115,12 +135,12 @@ class TemporalDifference(Agent):
         if id == 0: #player 0 plans for all of the agent's players
             self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
             self.state = self.getStateRep(id)
-            possActions = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
+            actionValues = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
             if self.algorithm == 'Q-learning':
-                self.action = self.eGreedy(possActions, self.epsilon)
+                self.action = self.actionSelection(actionValues, self.selParam)
             elif self.algorithm == 'Sarsa':
                 if self.action == None: #only true for the first action 
-                    self.action = self.eGreedy(possActions, self.epsilon)
+                    self.action = self.actionSelection(actionValues, self.selParam)
             self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each player
         return self.actions[id]
 
@@ -128,23 +148,21 @@ class TemporalDifference(Agent):
         if id == 0 and self.training == 1:
             self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
             sPrime = self.getStateRep(id)
-
             if self.algorithm == 'Q-learning':
-                aPrime = self.eGreedy(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), 0) #0-epsilon gives max action
+                aPrime = self.actionSelection(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), 0) #0-epsilon gives max action
             if self.algorithm == 'Sarsa':
-                aPrime = self.eGreedy(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), self.epsilon)
-            
+                aPrime = self.actionSelection(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), self.selParam)
             self.Qtable[self.state][self.action] = self.Qtable[self.state][self.action] + self.alpha * (R + self.gamma * self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players))[aPrime] - self.Qtable[self.state][self.action])
-            
             if self.algorithm == 'Sarsa':
                 self.action = aPrime
 
     def quit(self, id):
         if id == 0 and self.training == 1:
             try:
-                pickle.dump(self.Qtable, open('player' + str(self.players[id].nr) + self.QtableFN, "wb" ), pickle.HIGHEST_PROTOCOL)
+                pickle.dump(self.Qtable, open('table' + self.algorithm+'a'+str(self.alpha)+'e'+str(self.selParam)+'g'+str(self.gamma)+'i'+str(self.Qinitval)+'.p', "wb" ), pickle.HIGHEST_PROTOCOL)
+                print 'Qtable successfully saved'
             except:
-                print self.QtableFN + str(self.players[id].nr)
+                print str(self.players[id].nr)
                 print "player %s can't write Qtable" % self.players[id].nr
 
 class Human(Agent):
@@ -203,7 +221,7 @@ class DynamicProgramming(Agent):
         self.boardSize = (11,11) #TODO: Solve elegantly!
         Vinitval = 0
         V = np.zeros((self.boardSize[0], self.boardSize[1])) + Vinitval #TODO: only works for 2 agent scenario
-        threshold = 0.001 #0.00000001 #TODO: change to sensible value
+        threshold = 0.001 #TODO: change to sensible value
         gamma = 0.8
         terminalState = (self.boardSize[0]/2, self.boardSize[1]/2)
         policy = {}

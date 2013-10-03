@@ -153,6 +153,7 @@ class Observation(object):
         self.roles = settings.playerRoles
         self.positions = state.positions
         self.boardSize = settings.boardSize
+        self.turn = state.turn
 
 
 class State(object):
