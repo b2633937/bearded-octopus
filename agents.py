@@ -1,4 +1,4 @@
-import random, sys, pygame, pickle, math, numpy as np
+import random, sys, pygame, pickle, math, itertools, numpy as np
 from pygame.locals import *
 from locals import *
 import matplotlib.pyplot as plt
@@ -20,17 +20,20 @@ class Player(object):
         return self.agent.getAction(self.id)
 
     def observe(self, observation):
-            self.observation = observation
-            self.nr = observation.playerNr
-            self.role = observation.roles[self.nr] 
-            self.pos = observation.positions[self.nr]
-            self.boardSize = observation.boardSize
+        self.observation = observation
+        self.nr = observation.playerNr
+        self.role = observation.roles[self.nr] 
+        self.pos = observation.positions[self.nr]
+        self.boardSize = observation.boardSize
 
     def finalize(self, reward):
         self.agent.finalize(reward, self.id) 
 
     def quit(self):
         self.agent.quit(self.id)
+
+    def finalizeEpisode(self, reward):
+        self.agent.finalizeEpisode(reward)
 
 class Agent(object):
     def __init__(self):
@@ -102,11 +105,98 @@ class Agent(object):
     def quit(self, id):
         pass
 
+    def finalizeEpisode(self, reward):
+        pass
 
-class MonteCarlo(Agent):
+
+class OnPolicyMonteCarlo(Agent):
     """Implementation of both On- and Off-Policy Monte-Carlo Control Algorithms"""
-    def __init__(self):
-        super(MonteCarlo, self).__init__()
+
+    def __init__(self, gamma, epsilon, boardSize):
+        super(OnPolicyMonteCarlo,self).__init__()
+        self.terminal = (boardSize[0]/2, boardSize[1]/2)
+        # Discount factor
+        self.gamma = gamma
+        self.epsilon = epsilon 
+
+        # The collection of states is the cartesian product of the dimensions of the board
+        states = [(s,) for s in itertools.product(range(boardSize[0]), range(boardSize[1]))]
+
+        # The collection of state action pairs ins the cartesian product of states and actions
+        # TODO generalize over numver of agents (now hardcoded for one predator and one prey)
+        stateActionPairs = itertools.product(states, range(5))
+        self.Q = dict([(s, [0]*5) for s in states if s != self.terminal])            
+        self.R = dict([(sa , [0, 0]) for sa in stateActionPairs if sa[0] != self.terminal])
+        self.policy = self.randomSoftPolicy(states)
+        self.episode = []
+
+    # Return an action, adds state-action pair to episode as side effect.
+    def getAction(self, id):
+        s = self.getStateRep(id)
+        a = self.eGreedy(self.Q[s], self.epsilon )
+        self.episode.append((s, a))
+        return a
+
+    # Returns a randomly intialized epsilon-soft policy
+    def randomSoftPolicy(self, states):
+        policy = dict()
+        for s in states:
+            if s != self.terminal:
+                 policy[s] = self._initMoveProbs(s)
+        return policy
+
+    # Returns a random epsilon-soft policy for a single state
+    def _initMoveProbs(self, s):
+        amax = random.randint(0, 4) #Randomly initialise a*
+        actions = [0]*5
+        actions[amax] = 1
+        return self._softMoveProbs(actions)
+    
+    # Assigns probabilities to actions based on the epsilon soft method.
+    # actions must be the list Q(s)
+    def _softMoveProbs(self, actions):
+        maxi = 0
+        amax = 0
+        for i in range(len(actions)):
+            if actions[i] > maxi:
+                maxi = actions[i]
+                amax = i
+        
+        softPol = [None]*len(actions)
+        for i in range(len(softPol)): 
+            if i == amax:
+                softPol[i] = 1 - self.epsilon + self.epsilon / len(softPol)
+            else:
+                softPol[i] = self.epsilon / len(softPol)
+        return softPol
+
+    # Updates the reward 'memory' and Q
+    def updateRandQ(self, reward):
+        episode = self.episode
+        nrOfActions = len(episode)
+
+        # Go throught the episode backwards and update average rewads and Q values.
+        indices = range(len(episode) )
+        indices.reverse()        
+        for i in indices:
+            (s, a) = episode[i]
+            if (s, a) not in episode[: i - 1]:
+                self.R[(s, a)][0] += 1
+                self.R[(s, a)][1] = (self.R[(s, a)][1] * (self.R[(s, a)][0] - 1) + math.pow(self.gamma, (nrOfActions - i)) * reward) / self.R[(s,a)][0]
+                self.Q[s][a] = self.R[(s, a)][1]
+    
+    # Update policy with epsilon soft values.      
+    def updatePolicy(self):        
+        for s in set([s for (s, a) in self.episode]):
+            self.policy[s] = self._softMoveProbs(self.Q[s])
+
+            
+    # Executes updates at the end of each episode
+    def finalizeEpisode(self, reward):
+        self.updateRandQ(reward)
+        self.updatePolicy()
+        #print ''.join(['*']*len(self.episode))
+        self.episode = []
         
 class TemporalDifference(Agent):
     """docstring for TemporalDifference"""
