@@ -14,7 +14,6 @@ class Game(object):
             verbose = verbose,
             draw = draw,
             episodes = episodes,
-            maxEpisodeLength = maxEpisodeLength,
             fixedInitPositions = [],
             playerImages = [],
             playerRoles = [],
