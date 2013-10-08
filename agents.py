@@ -29,6 +29,9 @@ class Player(object):
     def finalize(self, reward):
         self.agent.finalize(reward, self.id) 
 
+    def episodeEnds(self, turns):
+        self.agent.episodeEnds(turns, self.id)
+
     def quit(self):
         self.agent.quit(self.id)
 
@@ -68,10 +71,10 @@ class Agent(object):
     def getAction(self): 
         sys.exit("function getAction not implemented for player " + str(player.nr))
 
-    def eGreedy(self, actionValues, selParam):
+    def eGreedy(self, actionValues, epsilon):
         maxval = max(actionValues)
         ind = [i for i, v in enumerate(actionValues) if v == maxval]
-        if random.random() >= selParam:  #select optimal action with 1 - eps prob
+        if random.random() >= epsilon:  #select optimal action with 1 - eps prob
             action = ind[int(random.random() * len(ind))] # Non-deterministic in a sense that it choses randomly amongst maxval actions 
         else:   #select random action (includes optimal action)
             action = int(random.random() * len(actionValues))
@@ -95,6 +98,8 @@ class Agent(object):
                 if rand < accum:
                     return i
 
+    def episodeEnds(self, turns, id):
+        pass
 
     def finalize(self, R, id):
         pass
@@ -103,10 +108,84 @@ class Agent(object):
         pass
 
 
-class MonteCarlo(Agent):
+class MonteCarloOnP(Agent):
+    """Implementation of both On- and Off-Policy Monte-Carlo Control Algorithms"""
+    def __init__(self, selAlgh, selParam):
+        super(MonteCarloOnP, self).__init__()
+        self.actionSelector = getattr(self, selAlgh)
+        self.selParam = selParam 
+        self.Qinitval = 0
+        self.gamma = 0.7
+        self.Returns = {}
+        self.episode = []
+        self.episodeReturns = []
+
+    def getAction(self, id): 
+        if id == 0: #player 0 plans for all of the agent's players
+            self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
+            self.state = self.getStateRep(id) #TODO: strange position to update state, counts for every player!?. 
+            pairs = self.Returns.get(self.state, [(self.Qinitval, 0)]*5**len(self.players))
+            actionValues = []
+            for pair in pairs:
+                if pair[1] == 0:
+                    actionValues.append(pair[0])
+                else:
+                    actionValues.append(pair[0]/pair[1])
+            self.action = self.actionSelector(actionValues, self.selParam)
+            self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each player
+        return self.actions[id]
+
+    def finalize(self, R, id):
+        if id == 0: #player 0 plans for all of the agent's players
+            self.episode.append((self.state, self.action))
+            self.episodeReturns.append(R)
+
+    def episodeEnds(self, turns, id):
+        if id == 0: #player 0 plans for all of the agent's players
+            for i in xrange(len(self.episode)):
+                sa = self.episode[i]
+                if sa in self.episode[0:i]:
+                    R = self.episodeReturns[self.episode.index(sa)]
+                else:
+                    R = 0
+                    for j in xrange(i,len(self.episode)):
+                        R += self.gamma**(j-i+1) * self.episodeReturns[j] 
+                self.episodeReturns[i] = R  
+                s = sa[0]
+                a = sa[1]
+                self.Returns[s] = self.Returns.get(s, [(self.Qinitval, 0)]*5**len(self.players))
+                accum, freq = self.Returns[s][a]     
+                self.Returns[s][a] = (accum+R, freq)
+
+class MonteCarloOffP(Agent):
     """Implementation of both On- and Off-Policy Monte-Carlo Control Algorithms"""
     def __init__(self):
-        super(MonteCarlo, self).__init__()
+        super(MonteCarloOffP, self).__init__()
+        self.BehaviorPolicy = DynamicProgramming()
+        self.Qinitval = 0
+        self.gamma = 0.7
+        self.N = {}
+        self.D = {}
+        self.Q = {}
+
+    def getBehaviorAction(self, id): 
+        state = self.getStateRep(id)[0] # we know state will be ((y,x),)
+        actions = self.BehaviorPolicy.policy[state] 
+        rand = random.random()
+        accum = 0
+        for a in actions:
+            accum += actions[a] 
+            if rand <= accum:
+                if a == 1:
+                    return 2
+                if a == 2:
+                    return 1
+                if a == 3:
+                    return 4
+                if a == 4:
+                    return 3
+                else:
+                    return 0
         
 class TemporalDifference(Agent):
     """docstring for TemporalDifference"""
@@ -209,6 +288,23 @@ class RandomComputer(Agent):
                     possibleActions.append(self.tile2Action(pos, freeAdjacentTile, boardSize))
                 #remaining actions have equal probability
                 return possibleActions[int(random.random()*len(possibleActions))] 
+
+        if self.players[id].role == PREDATOR:
+            return random.randint(0,4) 
+
+class RandomTripper(Agent):
+    """docstring for RandomComputer"""
+    def __init__(self):
+        super(RandomTripper,self).__init__()
+
+    def getAction(self, id):
+        if self.players[id].role == PREY:
+            #Trip with a given probability
+            rand =random.random()
+            if rand <= 0.2: 
+                return STAY
+            else:
+                return random.randint(0,4)
 
         if self.players[id].role == PREDATOR:
             return random.randint(0,4) 

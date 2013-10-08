@@ -7,12 +7,13 @@ from locals import *
 
 class Game(object):
 
-    def __init__(self, boardSize, verbose, draw, episodes):
+    def __init__(self, boardSize, verbose, draw, episodes, maxEpisodeLength):
         self.settings = type('Settings', (object,), dict(
             boardSize = boardSize,
             verbose = verbose,
             draw = draw,
             episodes = episodes,
+            maxEpisodeLength = maxEpisodeLength,
             fixedInitPositions = [],
             playerImages = [],
             playerRoles = [],
@@ -39,13 +40,15 @@ class Game(object):
                 self.screen.draw(settings, state, self.players)
                 self.screen.handleUserInput() #listen for Quit events etc.
 
-            if self.gameEnds(state): #check for game end
+
+            if state.activePlayerNr == 0 and self.gameEnds(state) or state.turn == settings.maxEpisodeLength: #check for game end
                 if settings.draw:
-                    SOUNDS['caught'].play()
+                    SOUNDS['caught'].play() #TODO: don't play when episodelength is reached
 
                 for i in xrange(self.settings.nroPlayers):
                     self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
-                    self.players[i].finalize(self.getReward(settings, state, i, action))                
+                    self.players[i].finalize(self.getReward(settings, state, i, action))
+                    self.players[i].episodeEnds(state.turn)                
 
                 stats[state.episode] = state.turn
                 self.initState(settings, state)
