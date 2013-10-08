@@ -7,11 +7,8 @@ from locals import *
 
 class Game(object):
 
-<<<<<<< HEAD
-    def __init__(self, boardSize, verbose, draw, episodes, maxEpisodeLength):
-=======
+
     def __init__(self, boardSize, verbose, draw, episodes, maxEpLen = 0):
->>>>>>> 7fa45dc6b02f71c7c9888e27df45f26908440a72
         self.settings = type('Settings', (object,), dict(
             boardSize = boardSize,
             verbose = verbose,
@@ -45,24 +42,17 @@ class Game(object):
             if settings.draw:
                 self.screen.draw(settings, state, self.players)
                 self.screen.handleUserInput() #listen for Quit events etc.
-
-<<<<<<< HEAD
-
-            if state.activePlayerNr == 0 and self.gameEnds(state) or state.turn == settings.maxEpisodeLength: #check for game end
-=======
+ 
+            #if state.activePlayerNr == 0 and self.gameEnds(state) or state.turn == settings.maxEpisodeLength: #check for game end
             if self.gameEnds(state) or (settings.maxEpLen and episodeLength >= maxEpLen): #check for game end
->>>>>>> 7fa45dc6b02f71c7c9888e27df45f26908440a72
                 if settings.draw:
                     SOUNDS['caught'].play() #TODO: don't play when episodelength is reached
 
                 for i in xrange(self.settings.nroPlayers):
                     self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
                     self.players[i].finalize(self.getReward(settings, state, i, action))
-<<<<<<< HEAD
-                    self.players[i].episodeEnds(state.turn)                
-=======
+                    # self.players[i].episodeEnds(state.turn)                
                     self.players[i].finalizeEpisode(self.getReward(settings, state, i, action))                
->>>>>>> 7fa45dc6b02f71c7c9888e27df45f26908440a72
 
                 episodeLength = 0
                 stats[state.episode] = state.turn
