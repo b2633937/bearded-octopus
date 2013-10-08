@@ -1,4 +1,4 @@
-import random, sys, pygame, pickle, math, numpy as np
+import random, sys, pygame, pickle, math, itertools, numpy as np
 from pygame.locals import *
 from locals import *
 import matplotlib.pyplot as plt
@@ -20,20 +20,20 @@ class Player(object):
         return self.agent.getAction(self.id)
 
     def observe(self, observation):
-            self.observation = observation
-            self.nr = observation.playerNr
-            self.role = observation.roles[self.nr] 
-            self.pos = observation.positions[self.nr]
-            self.boardSize = observation.boardSize
+        self.observation = observation
+        self.nr = observation.playerNr
+        self.role = observation.roles[self.nr] 
+        self.pos = observation.positions[self.nr]
+        self.boardSize = observation.boardSize
 
     def finalize(self, reward):
         self.agent.finalize(reward, self.id) 
 
-    def episodeEnds(self, turns):
-        self.agent.episodeEnds(turns, self.id)
-
     def quit(self):
         self.agent.quit(self.id)
+
+    def finalizeEpisode(self, reward):
+        self.agent.finalizeEpisode(reward)
 
 class Agent(object):
     def __init__(self):
@@ -98,8 +98,6 @@ class Agent(object):
                 if rand < accum:
                     return i
 
-    def episodeEnds(self, turns, id):
-        pass
 
     def finalize(self, R, id):
         pass
@@ -107,85 +105,98 @@ class Agent(object):
     def quit(self, id):
         pass
 
+    def finalizeEpisode(self, reward):
+        pass
 
-class MonteCarloOnP(Agent):
+
+class OnPolicyMonteCarlo(Agent):
     """Implementation of both On- and Off-Policy Monte-Carlo Control Algorithms"""
-    def __init__(self, selAlgh, selParam):
-        super(MonteCarloOnP, self).__init__()
-        self.actionSelector = getattr(self, selAlgh)
-        self.selParam = selParam 
-        self.Qinitval = 0
-        self.gamma = 0.7
-        self.Returns = {}
+
+    def __init__(self, gamma, epsilon, boardSize):
+        super(OnPolicyMonteCarlo,self).__init__()
+        self.terminal = (boardSize[0]/2, boardSize[1]/2)
+        # Discount factor
+        self.gamma = gamma
+        self.epsilon = epsilon 
+
+        # The collection of states is the cartesian product of the dimensions of the board
+        states = [(s,) for s in itertools.product(range(boardSize[0]), range(boardSize[1]))]
+
+        # The collection of state action pairs ins the cartesian product of states and actions
+        # TODO generalize over numver of agents (now hardcoded for one predator and one prey)
+        stateActionPairs = itertools.product(states, range(5))
+        self.Q = dict([(s, [0]*5) for s in states if s != self.terminal])            
+        self.R = dict([(sa , [0, 0]) for sa in stateActionPairs if sa[0] != self.terminal])
+        self.policy = self.randomSoftPolicy(states)
         self.episode = []
-        self.episodeReturns = []
 
-    def getAction(self, id): 
-        if id == 0: #player 0 plans for all of the agent's players
-            self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
-            self.state = self.getStateRep(id) #TODO: strange position to update state, counts for every player!?. 
-            pairs = self.Returns.get(self.state, [(self.Qinitval, 0)]*5**len(self.players))
-            actionValues = []
-            for pair in pairs:
-                if pair[1] == 0:
-                    actionValues.append(pair[0])
-                else:
-                    actionValues.append(pair[0]/pair[1])
-            self.action = self.actionSelector(actionValues, self.selParam)
-            self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each player
-        return self.actions[id]
+    # Return an action, adds state-action pair to episode as side effect.
+    def getAction(self, id):
+        s = self.getStateRep(id)
+        a = self.eGreedy(self.Q[s], self.epsilon )
+        self.episode.append((s, a))
+        return a
 
-    def finalize(self, R, id):
-        if id == 0: #player 0 plans for all of the agent's players
-            self.episode.append((self.state, self.action))
-            self.episodeReturns.append(R)
+    # Returns a randomly intialized epsilon-soft policy
+    def randomSoftPolicy(self, states):
+        policy = dict()
+        for s in states:
+            if s != self.terminal:
+                 policy[s] = self._initMoveProbs(s)
+        return policy
 
-    def episodeEnds(self, turns, id):
-        if id == 0: #player 0 plans for all of the agent's players
-            for i in xrange(len(self.episode)):
-                sa = self.episode[i]
-                if sa in self.episode[0:i]:
-                    R = self.episodeReturns[self.episode.index(sa)]
-                else:
-                    R = 0
-                    for j in xrange(i,len(self.episode)):
-                        R += self.gamma**(j-i+1) * self.episodeReturns[j] 
-                self.episodeReturns[i] = R  
-                s = sa[0]
-                a = sa[1]
-                self.Returns[s] = self.Returns.get(s, [(self.Qinitval, 0)]*5**len(self.players))
-                accum, freq = self.Returns[s][a]     
-                self.Returns[s][a] = (accum+R, freq)
+    # Returns a random epsilon-soft policy for a single state
+    def _initMoveProbs(self, s):
+        amax = random.randint(0, 4) #Randomly initialise a*
+        actions = [0]*5
+        actions[amax] = 1
+        return self._softMoveProbs(actions)
+    
+    # Assigns probabilities to actions based on the epsilon soft method.
+    # actions must be the list Q(s)
+    def _softMoveProbs(self, actions):
+        maxi = 0
+        amax = 0
+        for i in range(len(actions)):
+            if actions[i] > maxi:
+                maxi = actions[i]
+                amax = i
+        
+        softPol = [None]*len(actions)
+        for i in range(len(softPol)): 
+            if i == amax:
+                softPol[i] = 1 - self.epsilon + self.epsilon / len(softPol)
+            else:
+                softPol[i] = self.epsilon / len(softPol)
+        return softPol
 
-class MonteCarloOffP(Agent):
-    """Implementation of both On- and Off-Policy Monte-Carlo Control Algorithms"""
-    def __init__(self):
-        super(MonteCarloOffP, self).__init__()
-        self.BehaviorPolicy = DynamicProgramming()
-        self.Qinitval = 0
-        self.gamma = 0.7
-        self.N = {}
-        self.D = {}
-        self.Q = {}
+    # Updates the reward 'memory' and Q
+    def updateRandQ(self, reward):
+        episode = self.episode
+        nrOfActions = len(episode)
 
-    def getBehaviorAction(self, id): 
-        state = self.getStateRep(id)[0] # we know state will be ((y,x),)
-        actions = self.BehaviorPolicy.policy[state] 
-        rand = random.random()
-        accum = 0
-        for a in actions:
-            accum += actions[a] 
-            if rand <= accum:
-                if a == 1:
-                    return 2
-                if a == 2:
-                    return 1
-                if a == 3:
-                    return 4
-                if a == 4:
-                    return 3
-                else:
-                    return 0
+        # Go throught the episode backwards and update average rewads and Q values.
+        indices = range(len(episode) )
+        indices.reverse()        
+        for i in indices:
+            (s, a) = episode[i]
+            if (s, a) not in episode[: i - 1]:
+                self.R[(s, a)][0] += 1
+                self.R[(s, a)][1] = (self.R[(s, a)][1] * (self.R[(s, a)][0] - 1) + math.pow(self.gamma, (nrOfActions - i)) * reward) / self.R[(s,a)][0]
+                self.Q[s][a] = self.R[(s, a)][1]
+    
+    # Update policy with epsilon soft values.      
+    def updatePolicy(self):        
+        for s in set([s for (s, a) in self.episode]):
+            self.policy[s] = self._softMoveProbs(self.Q[s])
+
+            
+    # Executes updates at the end of each episode
+    def finalizeEpisode(self, reward):
+        self.updateRandQ(reward)
+        self.updatePolicy()
+        #print ''.join(['*']*len(self.episode))
+        self.episode = []
         
 class TemporalDifference(Agent):
     """docstring for TemporalDifference"""
