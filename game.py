@@ -8,7 +8,7 @@ from locals import *
 class Game(object):
 
 
-    def __init__(self, boardSize, verbose, draw, episodes, maxEpLen = 0):
+    def __init__(self, boardSize, verbose, draw, episodes, maxTurn, simultaniousActions):
         self.settings = type('Settings', (object,), dict(
             boardSize = boardSize,
             verbose = verbose,
@@ -18,7 +18,8 @@ class Game(object):
             playerImages = [],
             playerRoles = [],
             nroPlayers = 0,
-            maxEpLen = maxEpLen
+            maxTurn = maxTurn,
+            simultaniousActions = simultaniousActions
             ))
         self.players = []
 
@@ -27,7 +28,6 @@ class Game(object):
         settings = self.settings
         state = State()
         stats = np.zeros(settings.episodes)
-        episodeLength = 0
 
         pygame.init()
         if settings.draw:
@@ -36,25 +36,24 @@ class Game(object):
             self.screen = GameScreen(pygame.display.set_mode((800, 600), 0, 32), settings.boardSize)
        
         self.initState(settings, state)
-        #Main Game Loop
+
+        simultaniousActions = True
+        #------------------------ MAIN GAME LOOP ------------------------
         while True: 
             if settings.draw:
                 self.screen.draw(settings, state, self.players)
                 self.screen.handleUserInput() #listen for Quit events etc.
  
-            #if state.activePlayerNr == 0 and self.gameEnds(state) or state.turn == settings.maxEpisodeLength: #check for game end
-            if self.gameEnds(state) or (settings.maxEpLen and episodeLength >= maxEpLen): #check for game end
-                if settings.draw:
-                    SOUNDS['caught'].play() #TODO: don't play when episodelength is reached
+            if self.gameEnds(state) or (settings.maxTurn and state.rnd >= settings.maxTurn): #check for game end
+                if settings.draw and self.gameEnds(state):
+                    SOUNDS['caught'].play() #don't play when episodelength is reached
 
                 for i in xrange(self.settings.nroPlayers):
                     self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
-                    self.players[i].finalize(self.getReward(settings, state, i, action))
-                    # self.players[i].episodeEnds(state.turn)                
-                    self.players[i].finalizeEpisode(self.getReward(settings, state, i, action))                
+                    self.players[i].finalize(self.getReward(settings, state, i))
+                    self.players[i].finalizeEpisode(self.getReward(settings, state, i))
 
-                episodeLength = 0
-                stats[state.episode] = state.turn
+                stats[state.episode] = state.rnd
                 self.initState(settings, state)
                 state.caught += 1 #TODO: check if episode ended caused by duplicate pred pos
                 state.episode += 1
@@ -66,17 +65,32 @@ class Game(object):
             else:
                 #observe
                 self.players[state.activePlayerNr].observe(self.getObservation(settings, state, state.activePlayerNr, observability = 'fo'))
-                #finalize previous move now we know the new state
-                if state.turn != 0:
-                    self.players[state.activePlayerNr].finalize(self.getReward(settings, state, state.activePlayerNr, action))
+                #finalize previous move now we know the new state (T(s,a) = s')
+                if state.rnd != 0:
+                    self.players[state.activePlayerNr].finalize(self.getReward(settings, state, state.activePlayerNr))
+
                 #take new action
-                action = self.players[state.activePlayerNr].getAction()
+                state.actions.append(self.players[state.activePlayerNr].getAction())
                 #transit the world state
-                if action != None: #Human agents can take None action  
-                    self.stateTransition(settings, state, action, state.activePlayerNr)
-                episodeLength += 1 / settings.nroPlayers
-            if settings.draw:
-                fpsClock.tick(30)
+                if state.actions[-1] != None: #Human agents can take None action  
+                    if not simultaniousActions: #transit state per turn
+                        self.stateTransition(settings, state, state.actions[-1], state.activePlayerNr)
+                        state.actions = []
+                    if state.activePlayerNr == settings.nroPlayers-1: #end of round 
+                        if simultaniousActions: #transit state per round 
+                            for playerNr in xrange(settings.nroPlayers):
+                                self.stateTransition(settings, state, state.actions[playerNr], state.activePlayerNr)
+                            state.actions = []
+                        state.activePlayerNr = 0
+                        state.rnd += 1 
+                    else: #next players turn
+                        state.activePlayerNr += 1
+                        if settings.draw:
+                            fpsClock.tick(30)
+                    
+
+        #=======================================================================
+
 
     def addPlayer(self, player, role, fixedInitPos, img):
         player.nr = len(self.players) 
@@ -95,17 +109,11 @@ class Game(object):
     def stateTransition(self, settings, state, action, playerNr):
         state.positions[playerNr] = ((state.positions[playerNr][0]+EFFECTS[action][0])%settings.boardSize[0], 
             (state.positions[playerNr][1]+EFFECTS[action][1])%settings.boardSize[1])
-        #pass turn to next player
-        if playerNr == settings.nroPlayers-1:
-            state.activePlayerNr = 0
-            state.turn += 1
-        else:
-            state.activePlayerNr += 1
 
     def gameEnds(self, state): #game ends if any 2 players share same position
         return len(set(state.positions)) != len(self.players)
 
-    def getReward(self, settings, state, playerNr, action): 
+    def getReward(self, settings, state, playerNr): 
         nroPreds = 0
         preds = set()
         s = set()
@@ -132,8 +140,8 @@ class Game(object):
     def initState(self, settings, state):
         #give all fixedPos player their position
         positionSet = set()
-        positions = [None]*len(self.players)
-        for i in xrange(len(self.players)):
+        positions = [None]*settings.nroPlayers
+        for i in xrange(settings.nroPlayers):
             if settings.fixedInitPositions[i] != None:
                 positions[i] = settings.fixedInitPositions[i]
                 positionSet.add(settings.fixedInitPositions[i])
@@ -146,9 +154,9 @@ class Game(object):
                         break
                 positions[i] = position
         state.positions = positions
-        state.turn = 0
+        state.rnd = 0
         state.activePlayerNr = 0
-
+        state.actions = []
 
 #####################################################################################
 
@@ -160,7 +168,7 @@ class Observation(object):
         self.roles = settings.playerRoles
         self.positions = state.positions
         self.boardSize = settings.boardSize
-        self.turn = state.turn
+        self.rnd = state.rnd
 
 
 class State(object):
@@ -168,8 +176,9 @@ class State(object):
     def __init__(self):
         super(State, self).__init__()
         self.positions = None
+        self.actions = None
         self.episode = 0
-        self.turn = 0
+        self.rnd = 0 
         self.caught = 0
         self.activePlayerNr = 0
 
@@ -243,7 +252,7 @@ class GameScreen(object):
         for i in xrange(len(players)):
             self.draw2Tile(state.positions[i], settings.playerImages[i])
         self.displaySurf.blit(self.quitTextSurf, self.quitTextRect)
-        self.textSurfaceObj = self.fontObj.render('Turn: ' + str(state.turn), True, BLUE)
+        self.textSurfaceObj = self.fontObj.render('Turn: ' + str(state.rnd), True, BLUE)
         self.displaySurf.blit(self.textSurfaceObj, self.textRectObj)
         self.caughtTextSurf = self.fontObj.render('Caught: ' + str(state.caught), True, BLUE)
         self.displaySurf.blit(self.caughtTextSurf, self.caughtTextRect)
