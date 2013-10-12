@@ -115,15 +115,14 @@ class OnPolicyMonteCarlo(Agent):
     def __init__(self, gamma, epsilon, boardSize):
         super(OnPolicyMonteCarlo,self).__init__()
         self.terminal = (boardSize[0]/2, boardSize[1]/2)
-        # Discount factor
-        self.gamma = gamma
+        self.gamma = gamma 
         self.epsilon = epsilon 
 
         # The collection of states is the cartesian product of the dimensions of the board
         states = [(s,) for s in itertools.product(range(boardSize[0]), range(boardSize[1]))]
 
         # The collection of state action pairs ins the cartesian product of states and actions
-        # TODO generalize over numver of agents (now hardcoded for one predator and one prey)
+        # TODO generalize over number of agents (now hardcoded for one predator and one prey)
         stateActionPairs = itertools.product(states, range(5))
         self.Q = dict([(s, [0]*5) for s in states if s != self.terminal])            
         self.R = dict([(sa , [0, 0]) for sa in stateActionPairs if sa[0] != self.terminal])
@@ -133,7 +132,7 @@ class OnPolicyMonteCarlo(Agent):
     # Return an action, adds state-action pair to episode as side effect.
     def getAction(self, id):
         s = self.getStateRep(id)
-        a = self.eGreedy(self.Q[s], self.epsilon )
+        a = self.eGreedy(self.Q[s], self.epsilon)
         self.episode.append((s, a))
         return a
 
@@ -247,13 +246,14 @@ class TemporalDifference(Agent):
                 self.action = aPrime
 
     def quit(self, id):
-        if id == 0 and self.training == 1:
-            try:
-                pickle.dump(self.Qtable, open('table' + self.algorithm+'a'+str(self.alpha)+'e'+str(self.selParam)+'g'+str(self.gamma)+'i'+str(self.Qinitval)+'.p', "wb" ), pickle.HIGHEST_PROTOCOL)
-                print 'Qtable successfully saved'
-            except:
-                print str(self.players[id].nr)
-                print "player %s can't write Qtable" % self.players[id].nr
+        pass
+        # if id == 0 and self.training == 1:
+        #     try:
+        #         pickle.dump(self.Qtable, open('table' + self.algorithm+'a'+str(self.alpha)+'e'+str(self.selParam)+'g'+str(self.gamma)+'i'+str(self.Qinitval)+'.p', "wb" ), pickle.HIGHEST_PROTOCOL)
+        #         print 'Qtable successfully saved'
+        #     except:
+        #         print str(self.players[id].nr)
+        #         print "player %s can't write Qtable" % self.players[id].nr
 
 class Human(Agent):
     """docstring for Human"""
@@ -275,16 +275,18 @@ class Human(Agent):
                     return STAY
         return None
 
-class RandomComputer(Agent):
-    """docstring for RandomComputer"""
+class PseudoRandom(Agent):
+    """ Although PsuedoRandom returns random actions for predators it does not for Prey
+    Prey never move into a predator and have a given probability to take WAIT action. 
+    All other actions have equal probability """
     def __init__(self):
-        super(RandomComputer,self).__init__()
+        super(PseudoRandom,self).__init__()
 
     def getAction(self, id):
         if self.players[id].role == PREY:
             #STAY with a given probability
             rand =random.random()
-            if rand <= 0.8: 
+            if rand < 0.8: 
                 return STAY
             else: #find actions that don't cause shared position
                 pos = self.players[id].pos
@@ -303,22 +305,13 @@ class RandomComputer(Agent):
         if self.players[id].role == PREDATOR:
             return random.randint(0,4) 
 
-class RandomTripper(Agent):
+class Random(Agent):
     """docstring for RandomComputer"""
     def __init__(self):
-        super(RandomTripper,self).__init__()
+        super(Random,self).__init__()
 
     def getAction(self, id):
-        if self.players[id].role == PREY:
-            #Trip with a given probability
-            rand =random.random()
-            if rand <= 0.2: 
-                return STAY
-            else:
-                return random.randint(0,4)
-
-        if self.players[id].role == PREDATOR:
-            return random.randint(0,4) 
+        return random.randint(0,4) 
 
 class DynamicProgramming(Agent):
     """Implementation of Policy Iteration and Value Iteration, works for 2 agent case when fullfilling the role of predator"""

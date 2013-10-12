@@ -8,12 +8,54 @@ import matplotlib.pyplot as plt
  though this remains work in progress for the moment"""
 
 def main():
+	assignment4_2()
+
+
+def assignment4_1():
+
+	runs = 1
+	episodes = 1000
+	maxTurn = 0 #0 amounts to no maximum number of turns per round
+	turns = np.zeros(episodes)
+	simultaniousActions = True
+	preyTrip = True
+	verbose = False
+	draw = False
+	boardSize = (11,11)
+
+	for rnd in xrange(runs):
+		print 'running round ', rnd + 1 
+		game = Game(boardSize=boardSize, verbose=verbose, draw=draw, episodes=episodes, maxTurn=maxTurn, simultaniousActions=simultaniousActions, preyTrip=preyTrip)
+	 	game.addPlayer(Player(agent=Random()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
+	 	game.addPlayer(Player(agent=PseudoRandom()), role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy'])
+	 	game.addPlayer(Player(agent=PseudoRandom()), role=PREDATOR, fixedInitPos=(0,10), img=IMAGES['boy'])
+	 	# game.addPlayer(Player(agent=PseudoRandom()), role=PREDATOR, fixedInitPos=(10,0), img=IMAGES['boy'])
+	 	# game.addPlayer(Player(agent=PseudoRandom()), role=PREDATOR, fixedInitPos=(10,10), img=IMAGES['boy'])
+	 	results = game.play()
+	 	turns += results['turns']
+	turns = turns / float(runs)
+
+	print 'mean episode length: ', turns.mean(), ' with a std of: ', turns.std()
+	print 'predators winning chance: ', sum([outcome == 1 for outcome in results['outcomes']]) / float(episodes)
+
+	index = [outcome == 1 for outcome in results['outcomes']]
+	winEpLen = np.array([v for i, v in enumerate(turns) if index[i]])
+	print 'mean episode length when predators are winning: ', winEpLen.mean(), ' with a std of: ', winEpLen.std()
+
+	index = [outcome == -1 for outcome in results['outcomes']]
+	loseEpLen = np.array([v for i, v in enumerate(turns) if index[i]])
+	print 'mean episode length when predators are losing: ', loseEpLen.mean(), ' with a std of: ', loseEpLen.std()
+
+
+
+
+def assignment4_2():
 
 	runs = 10
-	episodes = 100
+	episodes = 500
 	maxTurn = 0 #0 amounts to no maximum number of turns per round
-	stats = np.zeros((episodes,4))
-	algorithm = 'Sarsa' #algorithm to be used by TD agents (either Sarsa or Q-learning)
+	turns = np.zeros((episodes,1))
+	algorithm = 'Q-learning' #algorithm to be used by TD agents (either Sarsa or Q-learning)
 	QtableFN = None  
 	Qinitval = 0
 	alpha = 0.5
@@ -21,13 +63,26 @@ def main():
 	selParam = 0.2 #selection parameter Tau or Epsilon
 	selAlgh = 'eGreedy' # eGreedy or softMax 
 	simultaniousActions = True
+	preyTrip = True
+	verbose = False
+	draw = False
+	boardSize = (11,11)
 
 	###################################################################################
 
 	for rnd in xrange(runs):
 		print 'running round ', rnd + 1 
-		game = Game(boardSize=(11,11), verbose=False, draw=False, episodes=episodes, maxTurn=maxTurn, simultaniousActions=simultaniousActions)  
+		game = Game(boardSize=boardSize, verbose=verbose, draw=draw, episodes=episodes, maxTurn=maxTurn, simultaniousActions=simultaniousActions, preyTrip=preyTrip)  
 
+		game.addPlayer(Player(agent=TemporalDifference(
+			algorithm = algorithm,
+			QtableFN = QtableFN,  
+			Qinitval = Qinitval,
+			alpha = alpha,
+			gamma = gamma,
+			selParam = selParam,
+			selAlgh = selAlgh)),
+			role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy']) 
 
 		# game.addPlayer(Player(agent=TemporalDifference(
 		# 	algorithm = algorithm,
@@ -37,26 +92,48 @@ def main():
 		# 	gamma = gamma,
 		# 	selParam = selParam,
 		# 	selAlgh = selAlgh)),
-		# 	role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy']) 
+		# 	role=PREDATOR, fixedInitPos=(0,10), img=IMAGES['boy']) 
 
-		game.addPlayer(Player(agent=OnPolicyMonteCarlo(gamma, selParam, (11,11))), role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy'])
+		#-----------------Add the Prey-----------------------
+		game.addPlayer(Player(agent=TemporalDifference(
+			algorithm = algorithm,
+			QtableFN = QtableFN,  
+			Qinitval = Qinitval,
+			alpha = alpha,
+			gamma = gamma,
+			selParam = selParam,
+			selAlgh = selAlgh)),
+			role=PREY, fixedInitPos=(5,5), img=IMAGES['princess']) 
 
-	 	# game.addPlayer(Player(agent=RandomComputer()), role=PREDATOR, fixedInitPos=(0,0), img=IMAGES['boy'])
-	 	game.addPlayer(Player(agent=RandomTripper()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
-	 	stats[:,0] += game.play()
-	stats[:,0] = stats[:,0] / float(runs)
+	 	# game.addPlayer(Player(agent=Random()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
+	 	results = game.play()
+	 	turns[:,0] += results['turns']
+	turns[:,0] = turns[:,0] / float(runs)
+
+	# print 'mean episode length: ', turns[:,0].mean(), ' with a std of: ', turns[:,0].std()
+	# print 'predators winning chance: ', sum([outcome == 1 for outcome in results['outcomes']]) / float(episodes)
+
+	index = [outcome == 1 for outcome in results['outcomes']]
+	winEpLen = np.array([v for i, v in enumerate(turns[:,0]) if index[i]])
+	print 'mean episode length when predators are winning: ', winEpLen.mean(), ' with a std of: ', winEpLen.std()
+
+	# index = [outcome == -1 for outcome in results['outcomes']]
+	# loseEpLen = np.array([v for i, v in enumerate(turns[:,0]) if index[i]])
+	# print 'mean episode length when predators are losing: ', loseEpLen.mean(), ' with a std of: ', loseEpLen.std()
+
 	try:
-	    pickle.dump(stats, open('stats'+algorithm+'a'+str(alpha[i])+'e'+str(selParam)+'g'+str(gamma)+'i'+str(Qinitval)+'.p', "wb"), pickle.HIGHEST_PROTOCOL)    
+	    pickle.dump(turns, open('turns'+algorithm+'a'+str(alpha)+'e'+str(selParam)+'g'+str(gamma)+'i'+str(Qinitval)+'.p', "wb"), pickle.HIGHEST_PROTOCOL)    
 	except:
-	    print "can't write stats file"
+	    print "can't write turns file"
 
 	fig, ax = plt.subplots(figsize=(12,5))
-	ax.plot(stats[:,0], label="Random Policy")
+	ax.plot(turns[:,0], label="Q-learning")
 	ax.legend(loc=1); 
 	ax.set_xlabel('episode')
 	ax.set_ylabel('turns')
-	ax.set_title('average episode length over ' + str(runs) + ' runs')
+	ax.set_title('mean episode length over ' + str(runs) + ' runs')
 	plt.show()
+
 
 #----- function used for plotting error margins -------
 def errorfill(x, y, yerr, color=None, alpha_fill=0.3, ax=None):
