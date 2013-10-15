@@ -51,10 +51,71 @@ class Agent(object):
                 state.append(self.translatePos(self.players[id].pos, self.players[id].observation.positions[i], self.players[id].observation.boardSize))
         return tuple(state) 
 
+    def stateReduce(self, state):
+        key = []
+        keyTail = []
+        for i in xrange(len(state)):
+            y,x = state[i]
+            if i == 0:
+                if y>x:
+                    ccRot = -1
+                else: 
+                    ccRot = 1
+
+            boardSize = (11,11)
+            (t_y, t_x) = (boardSize[0]/2, boardSize[1]/2)
+            equivalents = []
+            equivalents.append((y, x))
+
+            y,x = self.translate(y, x, -t_y, -t_x) 
+            equivalents.append(self.translate(x, y, t_y, t_x))   
+            for j in xrange(3):
+                (y, x) = (-x, y)
+                equivalents.append(self.translate(y, x, t_y, t_x))
+                equivalents.append(self.translate(x, y, t_y, t_x))
+
+            if i == 0:
+                keyHead = sorted(equivalents)[0] 
+                key.append(keyHead)
+                index = equivalents.index(keyHead)
+                rotations = index/2
+                mirrored = (index%2) * ccRot
+            else:
+                keyTail.append(equivalents[index])
+
+        if keyTail != []:
+            keyTail = sorted(list(itertools.permutations(keyTail)))[0]
+            for pos in keyTail:
+                key.append(pos)
+
+        return (tuple(key), rotations, mirrored)
+
+    def translate(self, y, x, t_y, t_x):
+        return (y + t_y, x + t_x)
+
+    def transformAction(self, action, rotations, mirrored):
+        if mirrored:
+            rotations = (rotations + mirrored)%4
+
+        if action == STAY:
+            action = STAY
+        elif action == UP:
+            rotate = [UP, RIGHT, DOWN, LEFT]
+            action = rotate[rotations]
+        elif action == DOWN:
+            rotate = [DOWN, LEFT, UP, RIGHT]
+            action = rotate[rotations]
+        elif action == LEFT:
+            rotate = [LEFT, UP, RIGHT, DOWN]
+            action = rotate[rotations]
+        elif action == RIGHT:
+            rotate = [RIGHT, DOWN, LEFT, UP]
+            action = rotate[rotations]
+        return action
+
     def action2Tile(self, action, position, boardSize):
         return ((position[0]+EFFECTS[action][0])%boardSize[0], 
             (position[1]+EFFECTS[action][1])%boardSize[1])
-
 
     def tile2Action(self, basePosition, adjacentTile, boardSize):
         if adjacentTile == self.action2Tile(UP, basePosition, boardSize): return UP
@@ -97,7 +158,6 @@ class Agent(object):
                 accum += actionProbs[i]
                 if rand < accum:
                     return i
-
 
     def finalize(self, R, id):
         pass
@@ -224,6 +284,8 @@ class TemporalDifference(Agent):
         if id == 0: #player 0 plans for all of the agent's players
             self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
             self.state = self.getStateRep(id)
+
+            self.state, self.rotations, self.mirrored = self.stateReduce(self.state)#stateReduction
             actionValues = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
             if self.algorithm == 'Q-learning':
                 self.action = self.actionSelection(actionValues, self.selParam)
@@ -231,12 +293,15 @@ class TemporalDifference(Agent):
                 if self.action == None: #only true for the first action 
                     self.action = self.actionSelection(actionValues, self.selParam)
             self.actions = np.unravel_index(self.action, self.shape) #tuple with an action for each player
-        return self.actions[id]
+        # return self.actions[id]
+        return self.transformAction(self.actions[id], self.rotations, self.mirrored) #stateReduction
+
 
     def finalize(self, R, id):
         if id == 0 and self.training == 1:
             self.Qtable[self.state] = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
             sPrime = self.getStateRep(id)
+            sPrime, self.rotations, self.mirrored = self.stateReduce(sPrime)#stateReduction
             if self.algorithm == 'Q-learning':
                 aPrime = self.actionSelection(self.Qtable.get(sPrime, [self.Qinitval]*5**len(self.players)), 0) #0-epsilon gives max action
             if self.algorithm == 'Sarsa':
@@ -311,6 +376,7 @@ class Random(Agent):
         super(Random,self).__init__()
 
     def getAction(self, id):
+        # return 0
         return random.randint(0,4) 
 
 class DynamicProgramming(Agent):
