@@ -257,14 +257,38 @@ class OnPolicyMonteCarlo(Agent):
         #print ''.join(['*']*len(self.episode))
         self.episode = []
         
+# class TemporalDifference(Agent):
+#     """docstring for TemporalDifference"""
+#     def __init__(self, algorithm, QtableFN, Qinitval, alpha, gamma, selParam, selAlgh):
+#         super(TemporalDifference,self).__init__()
+#         self.algorithm = algorithm
+#         self.actionSelection = getattr(self, selAlgh)
+#         self.QtableFN = QtableFN 
+#         self.Qinitval = Qinitval
+#         self.alpha = alpha
+#         self.gamma = gamma
+#         self.selParam = selParam # selection parameter Tau or Epsilon
+#         self.action = None #to store next action
+#         self.training = 1 
+
+#         if not self.training:  # don't select suboptimal actions if not training!
+#             self.selParam = 0 # amounts to greedy action selection
+#         try:
+#             self.Qtable = pickle.load(open( self.QtableFN, "rb"))
+#             print 'Qtable found and loaded'
+#         except:
+#             print 'Qtable not found, creating new'
+#             self.Qtable = {}
+
 class TemporalDifference(Agent):
     """docstring for TemporalDifference"""
-    def __init__(self, algorithm, QtableFN, Qinitval, alpha, gamma, selParam, selAlgh):
+    def __init__(self, algorithm, QtableFN, Qinitval, Qtable, alpha, gamma, selParam, selAlgh):
         super(TemporalDifference,self).__init__()
         self.algorithm = algorithm
         self.actionSelection = getattr(self, selAlgh)
         self.QtableFN = QtableFN 
         self.Qinitval = Qinitval
+        self.Qtable = Qtable
         self.alpha = alpha
         self.gamma = gamma
         self.selParam = selParam # selection parameter Tau or Epsilon
@@ -273,19 +297,22 @@ class TemporalDifference(Agent):
 
         if not self.training:  # don't select suboptimal actions if not training!
             self.selParam = 0 # amounts to greedy action selection
-        try:
-            self.Qtable = pickle.load(open( self.QtableFN, "rb"))
-            print 'Qtable found and loaded'
-        except:
-            print 'Qtable not found, creating new'
-            self.Qtable = {}
+            
+        if self.Qtable == None:
+            try:
+                self.Qtable = pickle.load(open( self.QtableFN, "rb"))
+                print 'Qtable found and loaded'
+            except:
+                print 'Qtable not found or provided, creating new'
+                self.Qtable = {}
     
     def getAction(self, id): 
         if id == 0: #player 0 plans for all of the agent's players
             self.shape = tuple([5]*len(self.players)) #TODO: preferably init only once!
             self.state = self.getStateRep(id)
-
+            # print self.state, ' after reduction: ', 
             self.state, self.rotations, self.mirrored = self.stateReduce(self.state)#stateReduction
+            # print self.state
             actionValues = self.Qtable.get(self.state, [self.Qinitval]*5**len(self.players))
             if self.algorithm == 'Q-learning':
                 self.action = self.actionSelection(actionValues, self.selParam)
@@ -376,8 +403,8 @@ class Random(Agent):
         super(Random,self).__init__()
 
     def getAction(self, id):
-        # return 0
-        return random.randint(0,4) 
+        return 0
+        # return random.randint(0,4) 
 
 class DynamicProgramming(Agent):
     """Implementation of Policy Iteration and Value Iteration, works for 2 agent case when fullfilling the role of predator"""

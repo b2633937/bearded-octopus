@@ -58,9 +58,14 @@ class Game(object):
                     self.players[i].observe(self.getObservation(settings, state, i, observability = 'fo'))
                     self.players[i].finalize(self.getReward(outcome, settings.playerRoles[i]))
                     self.players[i].finalizeEpisode(self.getReward(outcome, settings.playerRoles[i]))
-
                 turns[state.episode] = state.rnd
-                outcomes.append(outcome)
+
+                # When testing only interested in predator wins
+                if outcome == 1:
+                    outcomes.append(1)
+                else:
+                    outcomes.append(0)
+
                 self.initState(settings, state)
                 state.caught += 1 #TODO: check if episode ended caused by duplicate pred pos
                 state.episode += 1

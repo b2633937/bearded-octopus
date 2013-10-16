@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
  though this remains work in progress for the moment"""
 
 def main():
-	test()
+	assignment4_2()
 
 
 def test():
@@ -112,14 +112,14 @@ def assignment4_1():
 """###################################################################################"""
 def assignment4_2():
 
-	runs = 1
-	episodes = 20
+	runs = 100
+	episodes = 50000
 	maxTurn = 0 #0 amounts to no maximum number of turns per round
 	turns = np.zeros((episodes,1))
 	algorithm = 'Q-learning' #algorithm to be used by TD agents (either Sarsa or Q-learning)
 	QtableFN = None  
 	Qinitval = 0
-	alpha = 0.5
+	alpha = 0.7
 	gamma = 0.7
 	selParam = 0.1 #selection parameter Tau or Epsilon
 	selAlgh = 'eGreedy' # eGreedy or softMax 
@@ -134,10 +134,27 @@ def assignment4_2():
 		print 'running round ', rnd + 1 
 		game = Game(boardSize=boardSize, verbose=verbose, draw=draw, episodes=episodes, maxTurn=maxTurn, simultaniousActions=simultaniousActions, preyTrip=preyTrip)  
 
+		#-----------------Add the Prey-----------------------
 		game.addPlayer(Player(agent=TemporalDifference(
 			algorithm = algorithm,
 			QtableFN = QtableFN,  
 			Qinitval = Qinitval,
+			Qtable = None,
+			alpha = alpha,
+			gamma = gamma,
+			selParam = selParam,
+			selAlgh = selAlgh)),
+			role=PREY, fixedInitPos=(5,5), img=IMAGES['princess']) 
+	 	# game.addPlayer(Player(agent=Random()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
+
+		#-----------------Add the Predators-----------------------
+		sharedQ = {} #predators share Q-table
+
+		game.addPlayer(Player(agent=TemporalDifference(
+			algorithm = algorithm,
+			QtableFN = QtableFN,  
+			Qinitval = Qinitval,
+			Qtable = sharedQ,
 			alpha = alpha,
 			gamma = gamma,
 			selParam = selParam,
@@ -148,36 +165,38 @@ def assignment4_2():
 			algorithm = algorithm,
 			QtableFN = QtableFN,  
 			Qinitval = Qinitval,
+			Qtable = sharedQ,
 			alpha = alpha,
 			gamma = gamma,
 			selParam = selParam,
 			selAlgh = selAlgh)),
 			role=PREDATOR, fixedInitPos=(0,10), img=IMAGES['boy']) 
 
-		#-----------------Add the Prey-----------------------
 		game.addPlayer(Player(agent=TemporalDifference(
 			algorithm = algorithm,
 			QtableFN = QtableFN,  
 			Qinitval = Qinitval,
+		  	Qtable = sharedQ,
 			alpha = alpha,
 			gamma = gamma,
 			selParam = selParam,
 			selAlgh = selAlgh)),
-			role=PREY, fixedInitPos=(5,5), img=IMAGES['princess']) 
+			role=PREDATOR, fixedInitPos=(10,0), img=IMAGES['boy']) 
+
 
 	 	# game.addPlayer(Player(agent=Random()), role=PREY, fixedInitPos=(5,5), img=IMAGES['princess'])
 	 	results = game.play()
-	 	turns[:,0] += results['turns']
- 		wins += np.array([1 if outcome == 1 else 0 for outcome in results['outcomes']])
+	 	# turns[:,0] += results['turns']
+ 		wins += results['outcomes'] #np.array([1 if outcome == 1 else 0 for outcome in results['outcomes']])
 
-	turns[:,0] = turns[:,0] / float(runs)
+	# turns[:,0] = turns[:,0] / float(runs)
 
 	# print 'mean episode length: ', turns[:,0].mean(), ' with a std of: ', turns[:,0].std()
 	# print 'predators winning chance: ', sum([outcome == 1 for outcome in results['outcomes']]) / float(episodes)
 
 	wins = wins/float(runs)  
-	winEpLen = np.array([v for i, v in enumerate(turns[:,0]) if wins[i]])
-	print 'mean episode length when predators are winning: ', winEpLen.mean(), ' with a std of: ', winEpLen.std()
+	# winEpLen = np.array([v for i, v in enumerate(turns[:,0]) if wins[i]])
+	# print 'mean episode length when predators are winning: ', winEpLen.mean(), ' with a std of: ', winEpLen.std()
 
 	# index = [outcome == -1 for outcome in results['outcomes']]
 	# loseEpLen = np.array([v for i, v in enumerate(turns[:,0]) if index[i]])
@@ -189,7 +208,7 @@ def assignment4_2():
 	#     print "can't write turns file"
 
 	fig, ax = plt.subplots(figsize=(12,5))
-	ax.plot([0]+list(wins), label="Q-learning")
+	ax.plot(wins, label="Q-learning")
 	ax.axis([1, episodes, 0, 1])
 	ax.legend(loc=4); 
 	ax.set_xlabel('episode')
